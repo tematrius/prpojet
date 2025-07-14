@@ -43,6 +43,16 @@
       <div class="col-md-7 d-flex align-items-center">
         <form method="POST" action="login.php" class="login-form w-100">
           <h2 class="mb-4">Connexion</h2>
+          <?php if (!empty($_GET['error'])): ?>
+          <div class="alert alert-danger">
+              <?= htmlspecialchars($_GET['error']) ?>
+          </div>
+          <?php endif; ?>
+          <?php if (!empty($_SESSION['bloque']) && time() < $_SESSION['bloque_expire']): ?>
+          <div class="alert alert-warning">
+            Compte temporairement bloqué. <span id="timer"></span>
+          </div>
+          <?php endif; ?>
           <div class="mb-3">
             <label for="email" class="form-label">Adresse Email</label>
             <input type="email" name="email" class="form-control" required />
@@ -51,11 +61,20 @@
             <label for="mot_de_passe" class="form-label">Mot de passe</label>
             <input type="password" name="mot_de_passe" class="form-control" required />
           </div>
-          <button type="submit" class="btn btn-primary w-100">Se connecter</button>
+          <button type="submit" class="btn btn-primary w-100" <?= (!empty($_SESSION['bloque']) && time() < $_SESSION['bloque_expire']) ? 'disabled' : '' ?>>Se connecter</button>
         </form>
       </div>
 
     </div>
   </div>
+  <?php if (!empty($_SESSION['bloque']) && time() < $_SESSION['bloque_expire']): ?> 
+  <script> let expire = <?= $_SESSION['bloque_expire'] ?> * 1000; 
+  function countdown() { let now = Date.now(); 
+  let diff = Math.max(0, Math.floor((expire - now) / 1000)); 
+  let min = Math.floor(diff / 60); let sec = diff % 60; 
+  document.getElementById('timer').textContent = `${min} min ${sec} sec`; 
+  if (diff > 0) setTimeout(countdown, 1000); else window.location.reload();
+  } countdown(); 
+  </script> <?php endif; ?>
 </body>
 </html>

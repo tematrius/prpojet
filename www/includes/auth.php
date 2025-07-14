@@ -4,7 +4,7 @@ function secure_session() {
         session_start();
     }
     if (!isset($_SESSION['user'])) {
-        header("Location: /login.html");
+        header("Location: /index.php");
         exit;
     }
     // Vérification IP et user agent
@@ -17,8 +17,9 @@ function secure_session() {
     // Déconnexion après 15 min d’inactivité
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 900)) {
         session_unset();
+        $pdo->prepare('UPDATE utilisateurs SET derniere_connexion = NOW() WHERE id = ?')->execute([$_SESSION['user']['id']]);
         session_destroy();
-        header('Location: /login.html?timeout=1');
+        header('Location: /index.php?timeout=1');
         exit();
     }
     $_SESSION['last_activity'] = time();
