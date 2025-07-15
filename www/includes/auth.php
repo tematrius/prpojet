@@ -16,8 +16,8 @@ function secure_session() {
     }
     // Déconnexion après 15 min d’inactivité
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 900)) {
-        session_unset();
         $pdo->prepare('UPDATE utilisateurs SET derniere_connexion = NOW() WHERE id = ?')->execute([$_SESSION['user']['id']]);
+        session_unset();
         session_destroy();
         header('Location: /index.php?timeout=1');
         exit();

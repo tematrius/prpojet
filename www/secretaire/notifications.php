@@ -4,7 +4,7 @@ include '../includes/dashboard-template.php';
 
 // Vérification de rôle
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'secretaire') {
-    header('Location: /login.html');
+    header('Location: /index.php');
     exit;
 }
 
@@ -20,6 +20,22 @@ $stmt2 = $pdo->prepare("SELECT d.id, d.date_post, u.nom, a.nom_fichier, d.id_doc
     WHERE d.statut = 'en_attente'&& d.soumis_ag = 0");
 $stmt2->execute();
 $demandes = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+
+// Visualisations autorisées
+$stmt3 = $pdo->prepare("
+SELECT d.token, d.expiration_acces, d.telechargements_restants,
+a.nom_fichier, u.nom AS demandeur
+FROM demandes d
+JOIN archives a ON d.id_document = a.id
+JOIN utilisateurs u ON d.id_demandeur = u.id
+WHERE d.statut = 'accepte'
+AND d.expiration_acces > NOW()
+AND d.telechargements_restants > 0 
+AND u.role = 'secretaire'
+ORDER BY d.date_post DESC
+");
+$stmt3->execute();
+$visualisations = $stmt3->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <div class="container mt-4">
@@ -85,7 +101,32 @@ $demandes = $stmt2->fetchAll(PDO::FETCH_ASSOC);
     <?php else: ?>
       <p class="text-muted">Aucune demande d'autorisation en attente.</p>
     <?php endif; ?>
+
   </div>
+  <hr> <div class="mt-4"> 
+    <h5 class="text-primary"><i class="bi bi-eye me-2"></i> Fichiers accessibles</h5> 
+    <?php if (count($visualisations) > 0): ?> 
+      <ul class="list-group"> 
+        <?php foreach ($visualisations as $vis): ?> 
+          <li class="list-group-item d-flex justify-content-between align-items-center"> 
+            <div> 
+              <strong><?= htmlspecialchars($vis['nom_fichier']) ?>
+            </strong><br> 
+            <small class="text-muted">Demandé par <?= htmlspecialchars($vis['demandeur']) ?></small><br> 
+            <small class="text-muted">Expire : <?= date('d/m/Y H:i', strtotime($vis['expiration_acces'])) ?></small><br> 
+            <small class="text-muted">Restant :  <?= $vis['telechargements_restants'] ?> téléchargement(s)</small> 
+            </div> 
+            <div class="d-flex gap-2"><a href="voir-document.php?id=<?=  urlencode($vis['id_document']) ?>" target="_blank" class="btn btn-sm btn-primary">Voir</a>
+              <?php if ($vis['telechargements_restants'] > 0): ?> 
+               <a href="telecharger.php?token=<?= urlencode($vis['token']) ?>" target="_blank" class="btn btn-sm btn-secondary">Télécharger</a> 
+              <?php endif; ?> 
+            </div> 
+          </li>
+               <?php endforeach; ?> 
+              </ul> <?php else: ?> 
+              <p class="text-muted">Aucun fichier actuellement accessible.</p> 
+              <?php endif; ?> 
+            </div>
 </div>
 
 <script>

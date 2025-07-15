@@ -12,12 +12,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id_demande'], $_POST[
     if (!in_array($statut, ['accepte', 'refuse'])) die("❌ Statut invalide.");
 
     if ($statut === 'refuse' && $motif_refus) {
-        $stmt = $pdo->prepare("UPDATE demandes SET statut = ?, motif_refus = ? WHERE id = ?");
-        $stmt->execute([$statut, $motif_refus, $id]);
-    } else {
-        $stmt = $pdo->prepare("UPDATE demandes SET statut = ? WHERE id = ?");
-        $stmt->execute([$statut, $id]);
-    }
+      $stmt = $pdo->prepare("UPDATE demandes SET statut = ?, motif_refus = ?, date_reponse = NOW(), id_ag = ?  WHERE id = ?");
+      $stmt->execute([$statut, $motif_refus, $_SESSION['user']['id'], $id]);
+      } elseif ($statut === 'accepte') {
+      $token = bin2hex(random_bytes(16));
+      $minutes = intval($_POST['duree_minutes']) ?: 15;
+      $nb_telechargements = intval($_POST['nb_telechargements']) ?: 1;
+      $expiration = date('Y-m-d H:i:s', time() + ($minutes * 60));
+      
+      $stmt = $pdo->prepare("UPDATE demandes SET statut = ?, token = ?, expiration_acces = ?, telechargements_restants = ?, date_reponse = NOW(), id_ag = ?  WHERE id = ?");
+      $stmt->execute([$statut, $token, $expiration, $nb_telechargements, $_SESSION['user']['id'], $id]);
+}
 
     header("Location: autoriser-acces.php?info=success");
     exit;
@@ -108,7 +113,16 @@ textarea {
           <form method="POST" class="d-inline">
             <input type="hidden" name="id_demande" value="<?= $d['id'] ?>">
             <input type="hidden" name="statut" value="accepte">
-            <button type="submit" class="btn btn-success"><i class="bi bi-check2-square me-2"></i>  Accepter</button>
+            <div class="mb-2">
+            <label>Durée d’accès (minutes)</label>
+            <input type="number" name="duree_minutes" class="form-control" value="15" min="1" required>
+            </div>
+            <div class="mb-2">
+            <label>Nombre de téléchargements</label>
+            <input type="number" name="nb_telechargements" class="form-control" value="1" min="1" required>
+             </div>
+            <button type="submit" class="btn btn-success"><i class="bi bi-check2-square me-2"></i> Accepter</button>
+            
           </form>
 
           <!-- Refuser -->

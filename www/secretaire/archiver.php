@@ -1,114 +1,107 @@
 <?php 
 require '../includes/db.php';
+require '../includes/encryption.php'; 
 ob_start(); // Empêche les headers d’être envoyés trop tôt
 include '../includes/dashboard-template.php';
 
 
 
-// Pré-remplissage depuis GET (ex: lien depuis notification)
 $doc_id = $_GET['doc_id'] ?? null;
 $fichierPrecharge = $_GET['fichier'] ?? null;
 $provenancePrecharge = $_GET['provenance'] ?? null;
+function generate_uuid() {
+return bin2hex(random_bytes(16));
+}
 
-// Traitement uniquement en POST avec fichier
+$uploadRoot = __DIR__ . '/../uploads/archives/' . date('Y-m-d') . '/';
+if (!is_dir($uploadRoot)) mkdir($uploadRoot, 0777, true);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_FILES['file']) || isset($_POST['fichier']))) {
-    $uploadDir = __DIR__ . '/../uploads/';
-    if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
 
-    $nom = '';
-    if (isset($_FILES['file'])) {
-        $fichier = $_FILES['file'];
-        $tmp = $fichier['tmp_name'];
-        $nom = basename($fichier['name']);
-        $chemin = $uploadDir . $nom;
+$nomOriginal = '';
+$uuid = generate_uuid();
+$cheminFinal = $uploadRoot . $uuid . '.enc';
 
-        if (!move_uploaded_file($tmp, $chemin)) {
+if (isset($_FILES['file'])) {
+    $tmp = $_FILES['file']['tmp_name'];
+    $nomOriginal = basename($_FILES['file']['name']);
+} else {
+    $nomOriginal = $_POST['fichier'];
+    $tmp = __DIR__ . '/../uploads/' . $nomOriginal;
+    if (!file_exists($tmp)) {
+        $tmp = __DIR__ . '/../uploads/documents/' . $nomOriginal;
+        if (!file_exists($tmp)) {
             http_response_code(500);
-            echo "Erreur lors de l'enregistrement du fichier.";
+            echo "Fichier introuvable.";
             exit;
         }
-    } else {
-        $nom = $_POST['fichier'];
-        $chemin = $uploadDir . $nom;
-
-        if (!file_exists($chemin)) {
-            // 🟡 Vérifie dans le dossier uploads/documents/
-            $altPath = $uploadDir . 'documents/' . $nom;
-
-            if (file_exists($altPath)) {
-                $chemin = $altPath;
-            } else {
-                http_response_code(500);
-                echo "Fichier préchargé introuvable dans uploads/ ni uploads/documents/";
-                exit;
-            }
-        }
     }
+}
 
-    $provenance = $_POST['provenance'] ?? 'Inconnue';
-    if ($provenance === 'autre') {
-        $provenance = $_POST['provenance_autre'] ?? 'Inconnue';
-    }
-    $provenance = strtoupper(trim($provenance));
+// Chiffrement du fichier
+$data = file_get_contents($tmp);
+$encryptedData = encrypt_file($data); // Fonction dans encryption.php
+file_put_contents($cheminFinal, $encryptedData);
 
-    // Envoyer au serveur OCR
-    $curl = curl_init();
-    $data = [
-        'file' => new CURLFile($chemin),
-        'provenance' => $provenance
-    ];
+$cheminBDD = 'uploads/archives/' . date('Y-m-d') . '/' . $uuid . '.enc';
 
-    curl_setopt_array($curl, [
-        CURLOPT_URL => 'http://127.0.0.1:5000/ocr',
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $data
-    ]);
+$provenance = $_POST['provenance'] ?? 'Inconnue';
+if ($provenance === 'autre') {
+    $provenance = $_POST['provenance_autre'] ?? 'Inconnue';
+}
+$provenance = strtoupper(trim($provenance));
 
-      $response = curl_exec($curl);
-      $error = curl_error($curl);
-      curl_close($curl);
+// Envoi au serveur OCR inchangé
+$tempDecryptPath = $uploadRoot . $uuid . '-temp.pdf';
+file_put_contents($tempDecryptPath, decrypt_file($encryptedData)); // Si OCR exige PDF brut
 
-      if ($error) {
-          ob_end_clean();
-          http_response_code(500);
-          echo "Erreur OCR : $error";
-          exit;
-      }
+$curl = curl_init();
+$dataCurl = [
+    'file' => new CURLFile($tempDecryptPath),
+    'provenance' => $provenance
+];
 
+curl_setopt_array($curl, [
+    CURLOPT_URL => 'http://127.0.0.1:5000/ocr',
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => $dataCurl
+]);
 
-    $result = json_decode($response, true);
-    if (!isset($result['contenu'])) {
-        http_response_code(500);
-        echo "Réponse invalide du serveur OCR.";
-        exit;
-    }
+$response = curl_exec($curl);
+$error = curl_error($curl);
+curl_close($curl);
+unlink($tempDecryptPath);
 
-    // Insertion en base de données
-    try {
-        $est_restreint = ($provenance === 'AG') ? 1 : 0;
-        $stmt = $pdo->prepare("INSERT INTO archives (nom_fichier, chemin, provenance, contenu_textuel, est_restreint) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$nom, 'uploads/' . $nom, $provenance, $result['contenu'], $est_restreint]);
+if ($error) {
+    http_response_code(500);
+    echo "Erreur OCR : $error";
+    exit;
+}
 
-       
+$result = json_decode($response, true);
+if (!isset($result['contenu'])) {
+    http_response_code(500);
+    echo "Réponse invalide du serveur OCR.";
+    exit;
+}
 
-    } catch (Exception $e) {
-        http_response_code(500);
-        echo "Erreur BDD : " . $e->getMessage();
-    }
-     if (isset($_POST['doc_id'])) {
-            $stmt2 = $pdo->prepare("UPDATE documents SET etat = 'traite' WHERE id = ?");
-            $stmt2->execute([$_POST['doc_id']]);
-                    // ✅ Message + redirection
-       ob_end_clean();
- echo "<script>
-        alert('✅ Fichier archivé avec succès.');
-        window.location.href = 'notifications.php';
-        </script>";
-        }
-ob_end_flush();
+// Enregistrement BDD
+$est_restreint = ($provenance === 'AG') ? 1 : 0;
+$stmt = $pdo->prepare("INSERT INTO archives (nom_fichier, chemin, provenance, contenu_textuel, est_restreint) VALUES (?, ?, ?, ?, ?)");
+$stmt->execute([$nomOriginal, $cheminBDD, $provenance, $result['contenu'], $est_restreint]);
 
-     exit;
+if (isset($_POST['doc_id'])) {
+    $stmt2 = $pdo->prepare("UPDATE documents SET etat = 'traite' WHERE id = ?");
+    $stmt2->execute([$_POST['doc_id']]);
+}
+
+ob_end_clean();
+echo "<script>
+    alert('✅ Fichier archivé avec succès.');
+    window.location.href = 'notifications.php';
+</script>";
+exit;
  
 }
 
