@@ -1,1 +1,27 @@
-<?php require '../includes/db.php'; session_start(); if (!isset($_SESSION['user'])) { header('Location: ../index.php'); exit; } $id = intval($_GET['id'] ?? 0); $stmt = $pdo->prepare(" SELECT a.nom_fichier, a.chemin, d.expiration_acces FROM archives a JOIN demandes d ON d.id_document = a.id WHERE d.id_document = ? AND d.id_demandeur = ? AND d.statut = 'accepte' "); $stmt->execute([$id, $_SESSION['user']['id']]); $doc = $stmt->fetch(PDO::FETCH_ASSOC); if (!$doc) { exit('Accès refusé ou document inexistant.'); } if (strtotime($doc['expiration_acces']) < time()) { exit('Accès expiré.'); } $filePath = '../' . $doc['chemin']; if (!file_exists($filePath)) { exit('Fichier introuvable.'); } header('Content-Type: application/pdf'); header('Content-Disposition: inline; filename="' . basename($doc['nom_fichier']) . '"'); readfile($filePath); exit; ?>
+<?php require '../includes/db.php';
+require '../includes/encryption.php'; 
+session_start(); 
+
+if (!isset($_SESSION['user'])) { 
+    header('Location: ../index.php'); 
+    exit; 
+    } $id = intval($_GET['id'] ?? 0); 
+    $stmt = $pdo->prepare(" SELECT a.nom_fichier, a.chemin, d.expiration_acces FROM archives a JOIN demandes d ON d.id_document = a.id WHERE d.id_document = ? AND d.id_demandeur = ? AND d.statut = 'accepte' "); 
+    $stmt->execute([$id, $_SESSION['user']['id']]); 
+    $doc = $stmt->fetch(PDO::FETCH_ASSOC); 
+    if (!$doc) { exit('Accès refusé ou document inexistant.'); 
+    } if (strtotime($doc['expiration_acces']) < time()) { 
+        exit('Accès expiré.'); 
+        } $filePath = '../' . $doc['chemin']; 
+        if (!file_exists($filePath)) {
+             exit('Fichier introuvable.'); 
+             } header('Content-Type: application/pdf'); 
+             header('Content-Disposition: inline; filename="' . basename($doc['nom_fichier']) . '"'); 
+             $data = file_get_contents($filePath);
+                $decrypted = decrypt_file($data);
+
+                header('Content-Type: application/pdf');
+                header('Content-Disposition: inline; filename="' . basename($doc['nom_fichier']) . '"');
+                echo $decrypted;
+                exit; 
+             ?>

@@ -2,6 +2,7 @@
 ob_start();
 require '../includes/db.php';
 include '../includes/dashboard-template.php';
+date_default_timezone_set('Africa/Kinshasa');
 
 // Traitement des décisions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id_demande'], $_POST['statut'])) {
@@ -18,7 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id_demande'], $_POST[
       $token = bin2hex(random_bytes(16));
       $minutes = intval($_POST['duree_minutes']) ?: 15;
       $nb_telechargements = intval($_POST['nb_telechargements']) ?: 1;
-      $expiration = date('Y-m-d H:i:s', time() + ($minutes * 60));
+      $dt = new DateTime('now', new DateTimeZone('Africa/Kinshasa'));
+      $dt->modify("+$minutes minutes");
+      $expiration = $dt->format('Y-m-d H:i:s');
       
       $stmt = $pdo->prepare("UPDATE demandes SET statut = ?, token = ?, expiration_acces = ?, telechargements_restants = ?, date_reponse = NOW(), id_ag = ?  WHERE id = ?");
       $stmt->execute([$statut, $token, $expiration, $nb_telechargements, $_SESSION['user']['id'], $id]);

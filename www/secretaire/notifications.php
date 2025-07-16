@@ -24,14 +24,13 @@ $demandes = $stmt2->fetchAll(PDO::FETCH_ASSOC);
 // Visualisations autorisées
 $stmt3 = $pdo->prepare("
 SELECT d.token, d.expiration_acces, d.telechargements_restants,
-a.nom_fichier, u.nom AS demandeur
+a.nom_fichier, u.nom AS demandeur, d.id_demandeur
 FROM demandes d
 JOIN archives a ON d.id_document = a.id
 JOIN utilisateurs u ON d.id_demandeur = u.id
 WHERE d.statut = 'accepte'
 AND d.expiration_acces > NOW()
 AND d.telechargements_restants > 0 
-AND u.role = 'secretaire'
 ORDER BY d.date_post DESC
 ");
 $stmt3->execute();

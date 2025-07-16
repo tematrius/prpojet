@@ -1,5 +1,6 @@
 <?php 
-require '../includes/db.php'; 
+require '../includes/db.php';
+require '../includes/encryption.php'; 
 session_start(); 
 if (!isset($_SESSION['user'])) { 
     header('Location: ../index.php'); 
@@ -11,7 +12,7 @@ if (!$token) {
 $stmt->execute([$token, $_SESSION['user']['id']]); 
 $doc = $stmt->fetch(PDO::FETCH_ASSOC); 
 if (!$doc) { exit('Token invalide ou accès refusé.'); 
-} if (strtotime($doc['expiration_acces']) < time()) { 
+} if (strtotime($doc['expiration_acces']) > time()) { 
     exit('Accès expiré.'); 
 } if ($doc['telechargements_restants'] <= 0) {
      exit('Aucun téléchargement restant.'); 
@@ -24,6 +25,10 @@ $stmt = $pdo->prepare("UPDATE demandes SET telechargements_restants = telecharge
 $stmt->execute([$doc['id']]); 
 header('Content-Type: application/octet-stream'); 
 header('Content-Disposition: attachment; filename="' . basename($doc['nom_fichier']) . '"'); 
-readfile($filePath); 
+$data = file_get_contents($filePath);
+$decrypted = decrypt_file($data); // ta fonction existante
+header('Content-Type: application/pdf');
+header('Content-Disposition: attachment; filename="' . basename($doc['nom_fichier']) . '"');
+echo $decrypted;
 exit; 
 ?>
