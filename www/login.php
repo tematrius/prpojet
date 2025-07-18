@@ -49,7 +49,10 @@ if ($user) {
                 break; 
             case 'employe': 
                 header("Location: employe/dashboard.php"); 
-                break; 
+                break;
+            case 'superadmin': 
+                header("Location: superadmin/dashboard.php"); 
+                break;                 
             default: 
                 header("Location: index.php"); 
         } 
