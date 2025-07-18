@@ -76,7 +76,7 @@ const dz = new Dropzone("#uploadDropzone", {
 // Traitement de l'upload si POST AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['file'])) {
   header('Content-Type: text/plain');
-
+  require '../includes/log.php';
   $file = $_FILES['file'];
   $tmp = $file['tmp_name'];
   $nom = basename($file['name']);
@@ -95,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['file'])) {
   $commentaire = $_POST['commentaire'] ?? null;
   $stmt = $pdo->prepare("INSERT INTO documents (titre, nom_fichier, chemin, commentaire, provenance, etat, date_upload, auteur_id) VALUES (?, ?, ?, ?, 'ag', 'en_attente', NOW(), ?)");
   $stmt->execute([$titre, $nom, $cheminRelatif, $commentaire, $_SESSION['user']['id']]);
+  add_log('envoi_document', $_SESSION['user']['id'], $commentaire, 'document', $pdo->lastInsertId(), 'soumis', 'Document envoyé au secrétariat', $_SERVER['REMOTE_ADDR']);
 
   echo "Document enregistré.";
   exit;

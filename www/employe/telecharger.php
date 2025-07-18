@@ -2,6 +2,7 @@
 session_start();
 require_once '../includes/db.php';
 require_once '../includes/encryption.php';
+require '../includes/log.php';
 date_default_timezone_set('Africa/Kinshasa');
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'employe') {
     header('Location: ../index.php');
@@ -21,11 +22,14 @@ if ($id > 0) {
     }
     $filePath = '../' . $doc['chemin'];
     if (!file_exists($filePath)) exit('Fichier introuvable.');
+    // Incrémente le nombre de téléchargements
+    $pdo->prepare("UPDATE archives SET nombre_telechargements = nombre_telechargements + 1 WHERE id = ?")->execute([$id]);
     $stmtCle = $pdo->prepare("SELECT valeur FROM cles WHERE id = (SELECT id_cle FROM archives WHERE id = ?)");
     $stmtCle->execute([$id]);
     $cle = $stmtCle->fetchColumn();
     $data = file_get_contents($filePath);
     $decrypted = decrypt_file($data, $cle);
+    add_log('telechargement', $_SESSION['user']['id'] ?? null, '', 'document', $doc['id_document'], 'succes', 'Téléchargement du document', $_SERVER['REMOTE_ADDR']);
     $nomFinal = basename($doc['nom_fichier']);
     $extension = strtolower(pathinfo($nomFinal, PATHINFO_EXTENSION));
     $mimeTypes = [
@@ -71,11 +75,15 @@ if (!file_exists($filePath)) {
 // Décrémente
 $stmt = $pdo->prepare("UPDATE demandes SET telechargements_restants = telechargements_restants - 1 WHERE id = ?");
 $stmt->execute([$doc['id']]);
+// Incrémente le nombre de téléchargements
+$pdo->prepare("UPDATE archives SET nombre_telechargements = nombre_telechargements + 1 WHERE id = ?")->execute([$doc['id_document']]);
 $stmtCle = $pdo->prepare("SELECT valeur FROM cles WHERE id = ?");
 $stmtCle->execute([$doc['id_cle']]);
 $cle = $stmtCle->fetchColumn();
 $data = file_get_contents($filePath);
 $decrypted = decrypt_file($data, $cle);
+
+add_log('telechargement', $_SESSION['user']['id'] ?? null, '', 'document', $doc['id_document'], 'succes', 'Téléchargement du document', $_SERVER['REMOTE_ADDR']);
 $nomFinal = basename($doc['nom_fichier']);
 $extension = strtolower(pathinfo($nomFinal, PATHINFO_EXTENSION));
 $mimeTypes = [

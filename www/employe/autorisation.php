@@ -15,18 +15,29 @@ if ($doc_id) {
 
     // Si formulaire soumis
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        require '../includes/log.php';
         $commentaire = $_POST['commentaire'] ?? null;
 
-        // Éviter les doublons
-        $check = $pdo->prepare("SELECT COUNT(*) FROM demandes WHERE id_demandeur = ? AND id_document = ?");
+        // Vérifie la dernière demande pour ce document
+        $check = $pdo->prepare("SELECT expiration_acces, statut FROM demandes WHERE id_demandeur = ? AND id_document = ? ORDER BY date_post DESC LIMIT 1");
         $check->execute([$user_id, $doc_id]);
-        if ($check->fetchColumn() == 0) {
+        $last = $check->fetch(PDO::FETCH_ASSOC);
+        $can_create = false;
+        if (!$last) {
+            $can_create = true;
+        } else if ($last['statut'] !== 'accepte') {
+            $can_create = true;
+        } else if (!empty($last['expiration_acces']) && strtotime($last['expiration_acces']) < time()) {
+            $can_create = true;
+        }
+        if ($can_create) {
             $insert = $pdo->prepare("INSERT INTO demandes (id_demandeur, id_document, statut, date_post, commentaire) VALUES (?, ?, 'en_attente', NOW(), ?)");
             $insert->execute([$user_id, $doc_id, $commentaire]);
+            add_log('demande_acces', $user_id, $commentaire, 'demande', $pdo->lastInsertId(), 'soumis', 'Demande d\'accès créée', $_SERVER['REMOTE_ADDR']);
             echo "<script>alert('✅ Demande envoyée avec succès.'); window.location.href = 'autorisation.php';</script>";
             exit;
         } else {
-            echo "<div class='alert alert-warning mt-3 container'>⚠️ Vous avez déjà fait une demande pour ce document.</div>";
+            echo "<div class='alert alert-warning mt-3 container'>⚠️ Vous avez déjà fait une demande pour ce document et l'accès n'est pas encore expiré.</div>";
         }
     }
 }

@@ -37,17 +37,21 @@ $mimeTypes = [
 ];
 $mime = $mimeTypes[$extension] ?? 'application/octet-stream';
 if (ob_get_level()) ob_end_clean();
+// Incrémente le nombre de téléchargements
+$pdo->prepare("UPDATE archives SET nombre_telechargements = nombre_telechargements + 1 WHERE id = ?")->execute([$id]);
 // Récupère la clé associée au fichier
-$stmtCle = $pdo->prepare("SELECT valeur FROM cles WHERE id = (SELECT id_cle FROM archives WHERE nom_fichier = ?)");
-// Récupère l'id_cle directement
-$stmtIdCle = $pdo->prepare("SELECT id_cle FROM archives WHERE nom_fichier = ?");
-$stmtIdCle->execute([$fichier['nom_fichier']]);
+
+// Récupère l'id_cle correctement
+$stmtIdCle = $pdo->prepare("SELECT id_cle FROM archives WHERE id = ?");
+$stmtIdCle->execute([$id]);
 $idCle = $stmtIdCle->fetchColumn();
 $stmtCle = $pdo->prepare("SELECT valeur FROM cles WHERE id = ?");
 $stmtCle->execute([$idCle]);
 $cle = $stmtCle->fetchColumn();
 $data = file_get_contents($cheminRelatif);
 $decrypted = decrypt_file($data, $cle);
+require '../includes/log.php';
+add_log('telechargement', $_SESSION['user']['id'] ?? null, '', 'document', $id, 'succes', 'Téléchargement du document', $_SERVER['REMOTE_ADDR']);
 header('Content-Description: File Transfer');
 header('Content-Type: ' . $mime);
 header('Content-Disposition: attachment; filename="' . $nomFinal . '"');
