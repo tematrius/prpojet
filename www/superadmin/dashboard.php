@@ -16,7 +16,12 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {
 </head>
 <body>
   <div class="container mt-4">
-    <h2 class="mb-4"><i class="bi bi-shield-lock"></i> Super Admin - Tableau de bord</h2>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <a href="../logout.php" class="btn btn-outline-danger">
+            <i class="bi bi-box-arrow-right"></i> Déconnexion
+        </a>
+        <h2 class="mb-0"><i class="bi bi-speedometer"></i> Tableau de bord Super Admin</h2>
+    </div>
     <div class="row g-4">
       <div class="col-md-4">
         <div class="card h-100">
@@ -40,8 +45,17 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {
         <div class="card h-100">
           <div class="card-body text-center">
             <i class="bi bi-journal-text" style="font-size:2rem;"></i>
-            <h5 class="mt-2">Logs et statistiques</h5>
+            <h5 class="mt-2">Logs</h5>
             <a href="logs.php" class="btn btn-primary mt-2">Accéder</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100">
+          <div class="card-body text-center">
+            <i class="bi bi-bar-chart" style="font-size:2rem;"></i>
+            <h5 class="mt-2">Statistiques</h5>
+            <a href="stats.php" class="btn btn-primary mt-2">Accéder</a>
           </div>
         </div>
       </div>

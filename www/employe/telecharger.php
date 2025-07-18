@@ -21,8 +21,11 @@ if ($id > 0) {
     }
     $filePath = '../' . $doc['chemin'];
     if (!file_exists($filePath)) exit('Fichier introuvable.');
+    $stmtCle = $pdo->prepare("SELECT valeur FROM cles WHERE id = (SELECT id_cle FROM archives WHERE id = ?)");
+    $stmtCle->execute([$id]);
+    $cle = $stmtCle->fetchColumn();
     $data = file_get_contents($filePath);
-    $decrypted = decrypt_file($data);
+    $decrypted = decrypt_file($data, $cle);
     $nomFinal = basename($doc['nom_fichier']);
     $extension = strtolower(pathinfo($nomFinal, PATHINFO_EXTENSION));
     $mimeTypes = [
@@ -49,7 +52,7 @@ if ($id > 0) {
 if (!$token) {
     exit('Token manquant.');
 }
-$stmt = $pdo->prepare("SELECT a.nom_fichier, a.chemin, d.telechargements_restants, d.expiration_acces, d.id FROM archives a JOIN demandes d ON d.id_document = a.id WHERE d.token = ? AND d.id_demandeur = ? AND d.statut = 'accepte'");
+$stmt = $pdo->prepare("SELECT a.nom_fichier, a.chemin, d.telechargements_restants, d.expiration_acces, d.id, a.id_cle FROM archives a JOIN demandes d ON d.id_document = a.id WHERE d.token = ? AND d.id_demandeur = ? AND d.statut = 'accepte'");
 $stmt->execute([$token, $_SESSION['user']['id']]);
 $doc = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$doc) {
@@ -68,8 +71,11 @@ if (!file_exists($filePath)) {
 // Décrémente
 $stmt = $pdo->prepare("UPDATE demandes SET telechargements_restants = telechargements_restants - 1 WHERE id = ?");
 $stmt->execute([$doc['id']]);
+$stmtCle = $pdo->prepare("SELECT valeur FROM cles WHERE id = ?");
+$stmtCle->execute([$doc['id_cle']]);
+$cle = $stmtCle->fetchColumn();
 $data = file_get_contents($filePath);
-$decrypted = decrypt_file($data);
+$decrypted = decrypt_file($data, $cle);
 $nomFinal = basename($doc['nom_fichier']);
 $extension = strtolower(pathinfo($nomFinal, PATHINFO_EXTENSION));
 $mimeTypes = [

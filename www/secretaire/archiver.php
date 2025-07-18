@@ -1,6 +1,6 @@
 <?php 
 session_start();
-if (empty($_SESSION['user_id'])) {
+if (empty($_SESSION['user'])) {
     header('Location: index.php');
     exit;
 }
@@ -43,9 +43,17 @@ if (isset($_FILES['file'])) {
     }
 }
 
-// Chiffrement du fichier
+
+// Récupère la clé active
+$stmt = $pdo->query("SELECT id, valeur FROM cles WHERE active = 1 LIMIT 1");
+$cle = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$cle) {
+    http_response_code(500);
+    echo "Aucune clé active disponible pour le chiffrement.";
+    exit;
+}
 $data = file_get_contents($tmp);
-$encryptedData = encrypt_file($data); // Fonction dans encryption.php
+$encryptedData = encrypt_file($data, $cle['valeur']);
 file_put_contents($cheminFinal, $encryptedData);
 
 $cheminBDD = 'uploads/archives/' . date('Y-m-d') . '/' . $uuid . '.enc';
@@ -58,7 +66,7 @@ $provenance = strtoupper(trim($provenance));
 
 // Envoi au serveur OCR inchangé
 $tempDecryptPath = $uploadRoot . $uuid . '-temp.pdf';
-file_put_contents($tempDecryptPath, decrypt_file($encryptedData)); // Si OCR exige PDF brut
+file_put_contents($tempDecryptPath, decrypt_file($encryptedData, $cle['valeur'])); // Si OCR exige PDF brut
 
 $curl = curl_init();
 $dataCurl = [
@@ -93,8 +101,13 @@ if (!isset($result['contenu'])) {
 
 // Enregistrement BDD
 $est_restreint = ($provenance === 'AG') ? 1 : 0;
-$stmt = $pdo->prepare("INSERT INTO archives (nom_fichier, chemin, provenance, contenu_textuel, est_restreint) VALUES (?, ?, ?, ?, ?)");
-$stmt->execute([$nomOriginal, $cheminBDD, $provenance, $result['contenu'], $est_restreint]);
+
+$stmt = $pdo->prepare("INSERT INTO archives (nom_fichier, chemin, provenance, contenu_textuel, est_restreint, id_cle) VALUES (?, ?, ?, ?, ?, ?)");
+$ok = $stmt->execute([$nomOriginal, $cheminBDD, $provenance, $result['contenu'], $est_restreint, $cle['id']]);
+if (!$ok) {
+    $errorInfo = $stmt->errorInfo();
+    die("Erreur SQL : " . $errorInfo[2]);
+}
 
 if (isset($_POST['doc_id'])) {
     $stmt2 = $pdo->prepare("UPDATE documents SET etat = 'traite' WHERE id = ?");

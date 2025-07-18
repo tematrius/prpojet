@@ -37,8 +37,17 @@ $mimeTypes = [
 ];
 $mime = $mimeTypes[$extension] ?? 'application/octet-stream';
 if (ob_get_level()) ob_end_clean();
+// Récupère la clé associée au fichier
+$stmtCle = $pdo->prepare("SELECT valeur FROM cles WHERE id = (SELECT id_cle FROM archives WHERE nom_fichier = ?)");
+// Récupère l'id_cle directement
+$stmtIdCle = $pdo->prepare("SELECT id_cle FROM archives WHERE nom_fichier = ?");
+$stmtIdCle->execute([$fichier['nom_fichier']]);
+$idCle = $stmtIdCle->fetchColumn();
+$stmtCle = $pdo->prepare("SELECT valeur FROM cles WHERE id = ?");
+$stmtCle->execute([$idCle]);
+$cle = $stmtCle->fetchColumn();
 $data = file_get_contents($cheminRelatif);
-$decrypted = decrypt_file($data);
+$decrypted = decrypt_file($data, $cle);
 header('Content-Description: File Transfer');
 header('Content-Type: ' . $mime);
 header('Content-Disposition: attachment; filename="' . $nomFinal . '"');
