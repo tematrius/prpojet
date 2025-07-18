@@ -1,6 +1,7 @@
 <?php
 require '../includes/db.php';
 include '../includes/dashboard-template.php';
+date_default_timezone_set('Africa/Kinshasa');
 
 $user_id = $_SESSION['user']['id'];
 $doc_id = $_GET['doc'] ?? null;
@@ -31,8 +32,9 @@ if ($doc_id) {
 }
 
 // Récupérer les demandes passées
+// On récupère aussi expiration_acces, telechargements_restants et token
 $stmt = $pdo->prepare("
-    SELECT d.id, d.statut, d.date_post, d.commentaire, d.motif_refus, a.nom_fichier, a.chemin, a.provenance, a.date_upload
+    SELECT d.id, d.statut, d.date_post, d.commentaire, d.motif_refus, d.expiration_acces, d.telechargements_restants, d.token, id_document, a.nom_fichier, a.chemin, a.provenance, a.date_upload
     FROM demandes d
     JOIN archives a ON d.id_document = a.id
     WHERE d.id_demandeur = ?
@@ -97,8 +99,21 @@ $demandes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <?php endif; ?>
               </td>
               <td>
-                <?php if ($dem['statut'] === 'accepte'): ?>
-                  <a href="<?= htmlspecialchars($dem['chemin']) ?>" target="_blank" class="btn btn-sm btn-outline-primary">Voir</a>
+                <?php if ($dem['statut'] === 'accepte'):
+                  $expiration = isset($dem['expiration_acces']) ? strtotime($dem['expiration_acces']) : 0;
+                  $now = time();
+                  $can_see = $expiration > $now;
+                  $can_download = $can_see && $dem['telechargements_restants'] > 0;
+                ?>
+                  <?php if ($can_see): ?>
+                    <a href="voir-document.php?id=<?= $dem['id_document'] ?>" target="_blank" class="btn btn-sm btn-outline-primary">Voir</a>
+                  <?php endif; ?>
+                  <?php if ($can_download): ?>
+                    <a href="telecharger.php?token=<?= urlencode($dem['token']) ?>" class="btn btn-sm btn-success ms-1">Télécharger (<?= $dem['telechargements_restants'] ?>)</a>
+                  <?php endif; ?>
+                  <?php if (!$can_see && !$can_download): ?>
+                    <span class="text-muted">Accès expiré</span>
+                  <?php endif; ?>
                 <?php elseif ($dem['statut'] === 'refuse'): ?>
                   <i class="text-muted">Refusé</i>
                 <?php else: ?>

@@ -78,8 +78,8 @@ $derniers_fichiers = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <span class="badge bg-warning text-dark">Restreint</span>
               <a href="autorisation.php?doc=<?= $file['id'] ?>" class="btn btn-sm btn-outline-warning">Demander l'accès</a>
             <?php else: ?>
-              <a href="<?= $file['chemin'] ?>" target="_blank" class="btn btn-sm btn-outline-primary">Voir</a>
-              <a href="<?= $file['chemin'] ?>" download class="btn btn-sm btn-outline-secondary">Télécharger</a>
+              <a href="voir-document.php?id=<?= $file['id'] ?>" target="_blank" class="btn btn-sm btn-outline-primary">Voir</a>
+              <a href="telecharger.php?id=<?= $file['id'] ?>" download class="btn btn-sm btn-outline-secondary">Télécharger</a>
             <?php endif; ?>
           </div>
         </div>

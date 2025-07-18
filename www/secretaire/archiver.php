@@ -1,4 +1,9 @@
 <?php 
+session_start();
+if (empty($_SESSION['user_id'])) {
+    header('Location: index.php');
+    exit;
+}
 require '../includes/db.php';
 require '../includes/encryption.php'; 
 ob_start(); // Empêche les headers d’être envoyés trop tôt

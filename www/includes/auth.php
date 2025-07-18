@@ -15,7 +15,9 @@ function secure_session() {
         exit('Session compromise');
     }
     // Déconnexion après 15 min d’inactivité
+    
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 900)) {
+        include __DIR__ . '/db.php';
         $pdo->prepare('UPDATE utilisateurs SET derniere_connexion = NOW() WHERE id = ?')->execute([$_SESSION['user']['id']]);
         session_unset();
         session_destroy();

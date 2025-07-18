@@ -1,34 +1,29 @@
 <?php
-require '../includes/db.php';
+session_start();
+require_once '../includes/db.php';
+require_once '../includes/encryption.php';
+if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'ag') {
+    header('Location: ../index.php');
+    exit;
+}
 
 $id = $_GET['id'] ?? null;
 if (!$id || !is_numeric($id)) {
     die("ID invalide.");
 }
 
-// Récupérer les infos du fichier
 $stmt = $pdo->prepare("SELECT nom_fichier, chemin FROM archives WHERE id = ?");
 $stmt->execute([$id]);
 $fichier = $stmt->fetch(PDO::FETCH_ASSOC);
-
 if (!$fichier) {
     die("Fichier introuvable en base.");
 }
-
-// Chemin absolu du fichier
 $cheminRelatif = '../' . $fichier['chemin'];
-$cheminFichier = realpath($cheminRelatif);
-
-// Vérifier l’existence
-if (!$cheminFichier || !file_exists($cheminFichier)) {
+if (!file_exists($cheminRelatif)) {
     die("Fichier introuvable sur le serveur.");
 }
-
-// Forcer le téléchargement avec le bon nom + extension
-$nomFinal = basename($fichier['nom_fichier']); // ex: exemple.pdf
+$nomFinal = basename($fichier['nom_fichier']);
 $extension = strtolower(pathinfo($nomFinal, PATHINFO_EXTENSION));
-
-// Déterminer le type MIME à la main
 $mimeTypes = [
     'pdf' => 'application/pdf',
     'doc' => 'application/msword',
@@ -41,14 +36,13 @@ $mimeTypes = [
     'txt' => 'text/plain'
 ];
 $mime = $mimeTypes[$extension] ?? 'application/octet-stream';
-
-// Nettoyage du buffer
 if (ob_get_level()) ob_end_clean();
-
+$data = file_get_contents($cheminRelatif);
+$decrypted = decrypt_file($data);
 header('Content-Description: File Transfer');
 header('Content-Type: ' . $mime);
 header('Content-Disposition: attachment; filename="' . $nomFinal . '"');
-header('Content-Length: ' . filesize($cheminFichier));
-readfile($cheminFichier);
+header('Content-Length: ' . strlen($decrypted));
+echo $decrypted;
 exit;
 ?>

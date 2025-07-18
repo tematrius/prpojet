@@ -7,7 +7,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id_document'])) {
     $id_user = $_SESSION['user']['id'] ?? null;
 
     if (!$id_user) {
-        header("Location: ../login.html");
+        header("Location: ../index.php?error=not_logged_in");
         exit;
     }
 

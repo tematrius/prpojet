@@ -3,7 +3,7 @@ session_start();
 require '../includes/db.php';
 
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'secretaire') {
-    header('Location: /login.html');
+    header('Location: /index.php');
     exit;
 }
 

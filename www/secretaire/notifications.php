@@ -2,6 +2,9 @@
 require '../includes/db.php';
 include '../includes/dashboard-template.php';
 
+$user_id = $_SESSION['user']['id'];
+
+
 // Vérification de rôle
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'secretaire') {
     header('Location: /index.php');
@@ -24,16 +27,16 @@ $demandes = $stmt2->fetchAll(PDO::FETCH_ASSOC);
 // Visualisations autorisées
 $stmt3 = $pdo->prepare("
 SELECT d.token, d.expiration_acces, d.telechargements_restants,
-a.nom_fichier, u.nom AS demandeur, d.id_demandeur
+a.nom_fichier, u.nom AS demandeur,id_document
 FROM demandes d
 JOIN archives a ON d.id_document = a.id
 JOIN utilisateurs u ON d.id_demandeur = u.id
 WHERE d.statut = 'accepte'
+AND id_demandeur = ?
 AND d.expiration_acces > NOW()
-AND d.telechargements_restants > 0 
 ORDER BY d.date_post DESC
 ");
-$stmt3->execute();
+$stmt3->execute([$user_id]);
 $visualisations = $stmt3->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
