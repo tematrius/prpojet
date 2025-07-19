@@ -52,6 +52,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = $ok
             ? '<div class="alert alert-success">Utilisateur modifié avec succès.</div>'
             : '<div class="alert alert-danger">Erreur lors de la modification.</div>';
+
+        // Log administratif
+        if ($ok) {
+            require_once '../includes/log.php';
+            add_log(
+                'admin_modifier_utilisateur',
+                $_SESSION['user']['id'],
+                '',
+                'utilisateur',
+                $id,
+                'succes',
+                "Modification utilisateur : $nom ($email)",
+                $_SERVER['REMOTE_ADDR'] ?? ''
+            );
+        }
     } else {
         $message = '<div class="alert alert-warning">Tous les champs sont obligatoires.</div>';
     }

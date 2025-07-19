@@ -27,7 +27,20 @@ if ($user['role'] === 'superadmin' || $user['role'] === 'ag') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt = $pdo->prepare('DELETE FROM utilisateurs WHERE id = ?');
+        require_once '../includes/log.php';
+        add_log(
+            'admin_supprimer_utilisateur',
+            $_SESSION['user']['id'],
+            '',
+            'utilisateur',
+             $id,
+            'succes',
+             "Suppression utilisateur : $nom ($email)",
+             $_SERVER['REMOTE_ADDR'] ?? ''
+        );    
     $stmt->execute([$id]);
+        // Log administratif
+
     header('Location: utilisateurs.php?deleted=1');
     exit;
 }

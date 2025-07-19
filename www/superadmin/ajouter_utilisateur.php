@@ -11,7 +11,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {
 
 $roles = [
     'employe' => 'Employé',
-    'ag' => 'Agent',
+    'ag' => 'Ag',
     'secretaire' => 'Secrétaire',
     'associe' => 'Associé simple',
     'superadmin' => 'Super Admin'
@@ -25,13 +25,36 @@ $message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($nom && $email && $role && $mdp) {
-        $hash = password_hash($mdp, PASSWORD_DEFAULT);
-        $stmt = $pdo->prepare('INSERT INTO utilisateurs (nom, email, role, mot_de_passe) VALUES (?, ?, ?, ?)');
-        if ($stmt->execute([$nom, $email, $role, $hash])) {
-            $message = '<div class="alert alert-success">Utilisateur ajouté avec succès.</div>';
-            $nom = $email = $role = $mdp = '';
+        // Vérifie si l'email existe déjà
+        $stmt_check = $pdo->prepare('SELECT COUNT(*) FROM utilisateurs WHERE email = ?');
+        $stmt_check->execute([$email]);
+        if ($stmt_check->fetchColumn() > 0) {
+            $message = '<div class="alert alert-danger">Cette adresse e-mail existe déjà.</div>';
         } else {
-            $message = '<div class="alert alert-danger">Erreur lors de l\'ajout.</div>';
+            $hash = password_hash($mdp, PASSWORD_DEFAULT);
+            $stmt = $pdo->prepare('INSERT INTO utilisateurs (nom, email, role, mot_de_passe) VALUES (?, ?, ?, ?)');
+            if ($stmt->execute([$nom, $email, $role, $hash])) {
+                $message = '<div class="alert alert-success">Utilisateur ajouté avec succès.</div>';
+                // Récupère l'ID du nouvel utilisateur
+                $id_new = $pdo->lastInsertId();
+                // Log administratif (user_id = superadmin connecté)
+                if ($id_new && isset($_SESSION['user']['id'])) {
+                    require_once '../includes/log.php';
+                    add_log(
+                        'admin_ajouter_utilisateur',
+                        $_SESSION['user']['id'] ?? null,
+                        '',
+                        'utilisateur',
+                        $id_new,
+                        'succes',
+                        "Ajout utilisateur : $nom ($email)",
+                        $_SERVER['REMOTE_ADDR'] ?? ''
+                    );
+                }
+                $nom = $email = $role = $mdp = '';
+            } else {
+                $message = '<div class="alert alert-danger">Erreur lors de l\'ajout.</div>';
+            }
         }
     } else {
         $message = '<div class="alert alert-warning">Tous les champs sont obligatoires.</div>';

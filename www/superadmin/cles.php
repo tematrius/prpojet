@@ -3,6 +3,7 @@ session_start();
 require '../includes/db.php';
 require '../includes/auth.php';
 require '../includes/encryption.php';
+include '../includes/dashboard-template.php';
 
 // Vérifie que le superadmin est connecté
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {

@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../includes/db.php';
+include '../includes/dashboard-template.php';
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {
     header('Location: ../index.php');
     exit;
@@ -17,9 +18,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {
 <body>
   <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <a href="../logout.php" class="btn btn-outline-danger">
-            <i class="bi bi-box-arrow-right"></i> Déconnexion
-        </a>
+
         <h2 class="mb-0"><i class="bi bi-speedometer"></i> Tableau de bord Super Admin</h2>
     </div>
     <div class="row g-4">

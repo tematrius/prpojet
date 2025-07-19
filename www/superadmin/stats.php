@@ -1,10 +1,12 @@
 <?php
 session_start();
+require '../includes/db.php';
+require '../includes/auth.php';
+
 if (empty($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {
     header('Location: ../index.php');
     exit;
 }
-require '../includes/db.php';
 include '../includes/dashboard-template.php';
 
 // Statistiques globales
