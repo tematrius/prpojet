@@ -12,22 +12,32 @@ if (!isset($_SESSION['user'])) {
             } if ($new_password !== $confirm_password) { 
                 $errors[] = 'Les mots de passe ne correspondent pas.'; 
                 } if (!$errors) { 
-                    $hashed = password_hash($new_password, PASSWORD_DEFAULT); 
-                    $stmt = $pdo->prepare('UPDATE utilisateurs SET mot_de_passe = ?, a_change_mdp = 1 WHERE id = ?'); 
-                    $stmt->execute([$hashed, $_SESSION['user']['id']]); 
-                    $_SESSION['user']['a_change_mdp'] = 1; 
-                    $success = 'Mot de passe modifié avec succès. Vous pouvez continuer.'; 
-                    switch ($_SESSION['user']['role']) { 
-                        case 'ag': header("Location: ../www/admin/dashboard.php"); 
-                        break; 
-                        case 'secretaire': header("Location: ../www/secretaire/dashboard.php"); 
-                        break; 
-                        case 'employe': header("Location: ../www/employe/dashboard.php"); 
-                        break; 
-                        default: header('Location: index.php'); 
-                        } 
-                        exit(); 
-                        } 
+    $hashed = password_hash($new_password, PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare('UPDATE utilisateurs SET mot_de_passe = ?, a_change_mdp = 1 WHERE id = ?');
+    $stmt->execute([$hashed, $_SESSION['user']['id']]);
+    $_SESSION['user']['a_change_mdp'] = 1;
+    $success = 'Mot de passe modifié avec succès. Vous pouvez continuer.';
+    // Enregistrement dans les logs
+    $logStmt = $pdo->prepare('INSERT INTO logs (user_id, action, statut, message, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)');
+    $logStmt->execute([
+        $_SESSION['user']['id'],
+        'changement_mdp',
+        'success',
+        'Mot de passe changé avec succès',
+        $_SERVER['REMOTE_ADDR'] ?? '',
+        $_SERVER['HTTP_USER_AGENT'] ?? ''
+    ]);
+    switch ($_SESSION['user']['role']) {
+        case 'ag': header("Location: ../www/admin/dashboard.php");
+        break;
+        case 'secretaire': header("Location: ../www/secretaire/dashboard.php");
+        break;
+        case 'employe': header("Location: ../www/employe/dashboard.php");
+        break;
+        default: header('Location: index.php');
+    }
+    exit();
+}
                         } 
                         ?> 
                         <!DOCTYPE html> 

@@ -13,6 +13,12 @@ if (!empty($_SESSION['login_message'])) {
 if (!empty($_SESSION['bloque'])) {
     $bloque = true;
     $bloque_expire = $_SESSION['bloque_expire'] ?? null;
+    // Si le blocage est expiré, on supprime les variables et réactive le formulaire
+    if ($bloque_expire && time() > $bloque_expire) {
+        unset($_SESSION['bloque'], $_SESSION['bloque_expire']);
+        $bloque = false;
+        $bloque_expire = null;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -58,7 +64,12 @@ if (!empty($_SESSION['bloque'])) {
 
       <!-- Colonne droite : Connexion -->
       <div class="col-md-7 d-flex align-items-center">
-        <form method="POST" action="login.php" class="login-form w-100">
+        <?php
+        if (empty($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        ?>
+        <form method="POST" action="login.php" class="login-form w-100" id="loginForm">
           <h2 class="mb-4">Connexion</h2>
           <?php if ($message): ?>
           <div class="alert alert-danger" id="message-block">
@@ -66,24 +77,79 @@ if (!empty($_SESSION['bloque'])) {
           </div>
           <?php endif; ?>
           <?php if ($bloque && $bloque_expire): ?>
-            <div>Déblocage dans : <span id="timer"></span></div>
+            <div class="alert alert-warning d-flex align-items-center gap-2" id="block-message">
+              <i class="bi bi-lock-fill" style="font-size:1.5rem;"></i>
+              <div>
+                <strong>Compte temporairement bloqué&nbsp;!</strong><br>
+                <span>Déblocage dans&nbsp;: <span id="timer" class="fw-bold"></span></span>
+              </div>
+            </div>
           <?php endif; ?>
           <div class="mb-3">
             <label for="email" class="form-label">Adresse Email</label>
             <input type="email" name="email" class="form-control" required <?php if ($bloque) echo 'disabled'; ?> />
           </div>
-          <div class="mb-3">
+          <div class="mb-3 position-relative">
             <label for="mot_de_passe" class="form-label">Mot de passe</label>
-            <input type="password" name="mot_de_passe" class="form-control" required <?php if ($bloque) echo 'disabled'; ?> />
+            <div class="input-group">
+              <input type="password" name="mot_de_passe" id="mot_de_passe" class="form-control" required <?php if ($bloque) echo 'disabled'; ?> />
+              <button type="button" class="btn btn-outline-secondary" id="togglePassword" tabindex="-1" style="border-top-left-radius:0;border-bottom-left-radius:0;">
+                <i class="bi bi-eye" id="eyeIcon"></i>
+              </button>
+            </div>
           </div>
+          <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
           <button type="submit" class="btn btn-primary w-100" <?php if ($bloque) echo 'disabled'; ?>>Se connecter</button>
         </form>
       </div>
 
     </div>
   </div>
-  <?php if ($bloque && $bloque_expire): ?>
   <script>
+    // Affichage/masquage du mot de passe
+    document.getElementById('togglePassword').addEventListener('click', function() {
+      const pwd = document.getElementById('mot_de_passe');
+      const icon = document.getElementById('eyeIcon');
+      if (pwd.type === 'password') {
+        pwd.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+      } else {
+        pwd.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+      }
+    });
+    // Validation côté client du formulaire de connexion
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      const email = this.email.value.trim();
+      const password = this.mot_de_passe.value;
+      let valid = true;
+      let errorMsg = '';
+      // Vérification email
+      if (!email.match(/^\S+@\S+\.\S+$/)) {
+        valid = false;
+        errorMsg += 'Adresse email invalide.<br>';
+      }
+      // Vérification mot de passe
+      if (!password) {
+        valid = false;
+        errorMsg += 'Mot de passe requis.<br>';
+      }
+      if (!valid) {
+        e.preventDefault();
+        let block = document.getElementById('message-block');
+        if (!block) {
+          block = document.createElement('div');
+          block.className = 'alert alert-danger';
+          block.id = 'message-block';
+          this.prepend(block);
+        }
+        block.innerHTML = errorMsg;
+      }
+    });
+
+    <?php if ($bloque && $bloque_expire): ?>
     let expire = <?= $bloque_expire ?> * 1000;
     let reloaded = false;
     function countdown() {
@@ -95,11 +161,17 @@ if (!empty($_SESSION['bloque'])) {
         setTimeout(countdown, 1000);
       } else if (!reloaded) {
         reloaded = true;
-        window.location.reload();
+        // Réactive les champs et le bouton
+        document.querySelector('input[name="email"]').disabled = false;
+        document.querySelector('input[name="mot_de_passe"]').disabled = false;
+        document.querySelector('button[type="submit"]').disabled = false;
+        document.getElementById('timer').textContent = 'Débloqué';
+        // Recharge la page pour supprimer le blocage côté serveur
+        setTimeout(() => window.location.reload(), 800);
       }
     }
     countdown();
+    <?php endif; ?>
   </script>
-  <?php endif; ?>
 </body>
 </html>

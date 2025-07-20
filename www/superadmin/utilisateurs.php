@@ -128,6 +128,13 @@ $roles = [
 </head>
 <body>
 <div class="container mt-4">
+    <?php if (!empty($_SESSION['action_message'])): ?>
+      <div class="alert alert-info d-flex align-items-center mb-3" role="alert">
+        <i class="bi bi-info-circle-fill me-2"></i>
+        <div><?= $_SESSION['action_message'] ?></div>
+      </div>
+      <?php unset($_SESSION['action_message']); ?>
+    <?php endif; ?>
     <h2 class="mb-4"><i class="bi bi-people-fill"></i> Gestion des utilisateurs</h2> 
     <div class="d-flex justify-content-between align-items-center mb-3">
         <a href="dashboard.php" class="btn btn-outline-secondary">
@@ -173,6 +180,15 @@ $roles = [
                 <a href="modifier_utilisateur.php?id=<?= $user['id'] ?>" class="btn btn-sm btn-outline-warning" title="Modifier"><i class="bi bi-pencil"></i></a>
                 <?php if ($user['role'] !== 'ag'): ?>
                   <a href="supprimer_utilisateur.php?id=<?= $user['id'] ?>" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></a>
+                <?php endif; ?>
+                <?php if ($user['is_active']): ?>
+                  <a href="bloquer_utilisateur.php?id=<?= $user['id'] ?>" class="btn btn-sm btn-outline-secondary" title="Bloquer l'utilisateur">
+                    <i class="bi bi-lock"></i> Bloquer
+                  </a>
+                <?php else: ?>
+                  <a href="debloquer_utilisateur.php?id=<?= $user['id'] ?>" class="btn btn-sm btn-success" title="Débloquer l'utilisateur">
+                    <i class="bi bi-unlock"></i> Débloquer
+                  </a>
                 <?php endif; ?>
               <?php endif; ?>
             </td>

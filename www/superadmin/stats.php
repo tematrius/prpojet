@@ -8,6 +8,7 @@ if (empty($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {
     exit;
 }
 // Statistiques globales
+
 $stats = [];
 $stmt = $pdo->query("SELECT COUNT(*) FROM archives");
 $stats['total_fichiers'] = $stmt->fetchColumn();
@@ -25,6 +26,10 @@ $stmt = $pdo->query("SELECT COUNT(*) FROM logs WHERE action = 'telechargement'")
 $stats['total_telechargements'] = $stmt->fetchColumn();
 $stmt = $pdo->query("SELECT COUNT(*) FROM logs WHERE action = 'consultation'");
 $stats['total_consultations'] = $stmt->fetchColumn();
+
+// Récupère le nombre de fichiers chiffrés par clé
+$cles_stats = $pdo->query("SELECT c.nom, COUNT(a.id) as total FROM cles c LEFT JOIN archives a ON a.id_cle = c.id GROUP BY c.id ORDER BY c.date_creation ASC")->fetchAll(PDO::FETCH_ASSOC);
+
 $actions = $pdo->query("SELECT action, DATE_FORMAT(timestamp, '%Y-%m') as mois, COUNT(*) as count FROM logs WHERE action IN ('ajout','suppression','modification') GROUP BY action, mois ORDER BY mois DESC")->fetchAll(PDO::FETCH_ASSOC);
 $labels = [];
 $ajouts = [];
@@ -47,7 +52,26 @@ foreach ($labels as $mois) {
     $modifications[] = $modif;
 }
 $roles = $pdo->query("SELECT role, COUNT(*) as count FROM utilisateurs GROUP BY role")->fetchAll(PDO::FETCH_ASSOC);
-$admin_actions = $pdo->query("SELECT l.*, u.nom FROM logs l LEFT JOIN utilisateurs u ON l.user_id = u.id WHERE l.action IN ('ajout','suppression','modification') ORDER BY l.timestamp DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+
+// Prépare les données pour le graphique blocages/déblocages
+$blocage_data = $pdo->query("SELECT action, DATE_FORMAT(timestamp, '%Y-%m') as mois, COUNT(*) as count FROM logs WHERE action IN ('login_bloque','admin_blocage','admin_deblocage') GROUP BY action, mois ORDER BY mois DESC")->fetchAll(PDO::FETCH_ASSOC);
+$mois_blocage = [];
+$blocages = [];
+$deblocages = [];
+foreach ($blocage_data as $row) {
+    if (!in_array($row['mois'], $mois_blocage)) $mois_blocage[] = $row['mois'];
+}
+foreach ($mois_blocage as $mois) {
+    $bloc = $debloc = 0;
+    foreach ($blocage_data as $row) {
+        if ($row['mois'] == $mois) {
+            if ($row['action'] == 'login_bloque' || $row['action'] == 'admin_blocage') $bloc += $row['count'];
+            if ($row['action'] == 'admin_deblocage') $debloc += $row['count'];
+        }
+    }
+    $blocages[] = $bloc;
+    $deblocages[] = $debloc;
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -531,9 +555,9 @@ $admin_actions = $pdo->query("SELECT l.*, u.nom FROM logs l LEFT JOIN utilisateu
       <div class="col-md-6">
         <div class="card stat-card" data-glossy="true" style="min-height: 350px; height: 100%;">
           <div class="card-body d-flex flex-column align-items-center justify-content-center" style="height: 100%; width: 100%; padding: 0.7rem 1rem;">
-            <div class="section-title" style="margin-bottom: 0.7rem;"><i class="bi bi-graph-up"></i> Évolution des actions utilisateurs (par mois)</div>
+            <div class="section-title" style="margin-bottom: 0.7rem;"><i class="bi bi-key"></i> Fichiers chiffrés par clé</div>
             <div style="width:100%; height:260px; display:flex; align-items:center; justify-content:center;">
-              <canvas id="actionsChart" height="260" style="width:100% !important; height:260px !important; max-width:100%;"></canvas>
+              <canvas id="clesChart" height="260" style="width:100% !important; height:260px !important; max-width:100%;"></canvas>
             </div>
           </div>
         </div>
@@ -552,32 +576,10 @@ $admin_actions = $pdo->query("SELECT l.*, u.nom FROM logs l LEFT JOIN utilisateu
     <div class="row g-4 mb-4">
       <div class="col-md-12">
         <div class="card stat-card" data-glossy="true">
-          <div class="card-body">
-            <div class="section-title"><i class="bi bi-person-lines-fill"></i> Dernières actions administratives</div>
-            <div class="table-responsive">
-              <table class="table table-striped align-middle">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Action</th>
-                    <th>Utilisateur</th>
-                    <th>Détails</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php foreach ($admin_actions as $action): ?>
-                  <tr>
-                    <td><?php echo date('d/m/Y H:i', strtotime($action['date'])); ?></td>
-                    <td><span class="badge bg-<?php echo ($action['action']=='ajout'?'success':($action['action']=='suppression'?'danger':'primary')); ?>"><?php echo ucfirst($action['action']); ?></span></td>
-                    <td>
-                      <span class="admin-avatar"><?php echo strtoupper(mb_substr($action['nom'],0,1).mb_substr($action['prenom'],0,1)); ?></span>
-                      <?php echo htmlspecialchars($action['nom'] . ' ' . $action['prenom']); ?>
-                    </td>
-                    <td><?php echo htmlspecialchars($action['details']); ?></td>
-                  </tr>
-                  <?php endforeach; ?>
-                </tbody>
-              </table>
+          <div class="card-body d-flex flex-column align-items-center justify-content-center" style="height: 100%; width: 100%; padding: 0.7rem 1rem;">
+            <div class="section-title" style="margin-bottom: 0.7rem;"><i class="bi bi-shield-lock"></i> Blocages et déblocages de comptes (par mois)</div>
+            <div style="width:100%; height:260px; display:flex; align-items:center; justify-content:center;">
+              <canvas id="blocagesChart" height="260" style="width:100% !important; height:260px !important; max-width:100%;"></canvas>
             </div>
           </div>
         </div>
@@ -588,25 +590,40 @@ $admin_actions = $pdo->query("SELECT l.*, u.nom FROM logs l LEFT JOIN utilisateu
     </footer>
   </div>
   <script>
-    // Graphique évolution des actions
-    const ctx = document.getElementById('actionsChart').getContext('2d');
-    new Chart(ctx, {
+    // Graphique fichiers chiffrés par clé
+    const ctxCles = document.getElementById('clesChart').getContext('2d');
+    new Chart(ctxCles, {
+      type: 'bar',
+      data: {
+        labels: <?php echo json_encode(array_map(function($c){return $c['nom'];}, $cles_stats)); ?>,
+        datasets: [{
+          label: 'Fichiers chiffrés',
+          data: <?php echo json_encode(array_map(function($c){return $c['total'];}, $cles_stats)); ?>,
+          backgroundColor: '#198754',
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          title: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+    // Graphique blocages/déblocages de comptes
+    const ctxBlocages = document.getElementById('blocagesChart').getContext('2d');
+    new Chart(ctxBlocages, {
       type: 'line',
       data: {
-        labels: <?php echo json_encode($labels); ?>,
+        labels: <?php echo json_encode($mois_blocage); ?>,
         datasets: [
           {
-            label: 'Ajouts',
-            data: <?php echo json_encode($ajouts); ?>,
-            borderColor: '#198754',
-            backgroundColor: 'rgba(25,135,84,0.15)',
-            tension: 0.3,
-            pointRadius: 4,
-            fill: true
-          },
-          {
-            label: 'Suppressions',
-            data: <?php echo json_encode($suppressions); ?>,
+            label: 'Blocages',
+            data: <?php echo json_encode($blocages); ?>,
             borderColor: '#dc3545',
             backgroundColor: 'rgba(220,53,69,0.15)',
             tension: 0.3,
@@ -614,10 +631,10 @@ $admin_actions = $pdo->query("SELECT l.*, u.nom FROM logs l LEFT JOIN utilisateu
             fill: true
           },
           {
-            label: 'Modifications',
-            data: <?php echo json_encode($modifications); ?>,
-            borderColor: '#0d6efd',
-            backgroundColor: 'rgba(13,110,253,0.15)',
+            label: 'Déblocages',
+            data: <?php echo json_encode($deblocages); ?>,
+            borderColor: '#198754',
+            backgroundColor: 'rgba(25,135,84,0.15)',
             tension: 0.3,
             pointRadius: 4,
             fill: true
@@ -635,7 +652,6 @@ $admin_actions = $pdo->query("SELECT l.*, u.nom FROM logs l LEFT JOIN utilisateu
         }
       }
     });
-    // Graphique répartition des rôles
     const ctxRoles = document.getElementById('rolesChart').getContext('2d');
     new Chart(ctxRoles, {
       type: 'pie',
@@ -643,7 +659,7 @@ $admin_actions = $pdo->query("SELECT l.*, u.nom FROM logs l LEFT JOIN utilisateu
         labels: <?php echo json_encode(array_map(function($r){return ucfirst($r['role']);}, $roles)); ?>,
         datasets: [{
           data: <?php echo json_encode(array_map(function($r){return $r['count'];}, $roles)); ?>,
-          backgroundColor: ['#0d6efd','#198754','#dc3545','#ffc107']
+          backgroundColor: ['#0d6efd','#198754','#dc3545','#ffc107','#fd7e14']
         }]
       },
       options: {

@@ -3,6 +3,7 @@ session_start();
 require '../includes/db.php';
 require '../includes/auth.php';
 require '../includes/encryption.php';
+require '../includes/log.php';
 include '../includes/dashboard-template.php';
 
 // Vérifie que le superadmin est connecté
@@ -19,8 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nom'])) {
     $nom = trim($_POST['nom']);
     if ($nom) {
         $valeur = generate_key(32); // Génère une clé forte
-        $stmt = $pdo->prepare('INSERT INTO cles (nom, valeur) VALUES (?, ?)');
+        // Ajoute la clé sans l'activer
+        $stmt = $pdo->prepare('INSERT INTO cles (nom, valeur, active) VALUES (?, ?, 0)');
         if ($stmt->execute([$nom, $valeur])) {
+            add_log('ajout_cle', $_SESSION['user']['id'] ?? 0, '', 'cle', null, 'ajout', 'Ajout d\'une nouvelle clé: ' . htmlspecialchars($nom), $_SERVER['REMOTE_ADDR']);
             $message = '<div class="alert alert-success">Clé ajoutée avec succès.</div>';
             $cle_generee = $valeur;
         } else {
@@ -39,6 +42,8 @@ if (isset($_GET['toggle']) && is_numeric($_GET['toggle'])) {
     // Active la clé choisie
     $stmt = $pdo->prepare('UPDATE cles SET active = 1 WHERE id = ?');
     $stmt->execute([$id]);
+    add_log('activation_cle', $_SESSION['user']['id'] ?? 0, '', 'cle', $id, 'activation', 'Activation de la clé ID ' . $id, $_SERVER['REMOTE_ADDR']);
+    $_SESSION['action_message'] = '<div class="alert alert-info"><i class="bi bi-info-circle-fill me-2"></i> Clé activée avec succès.</div>';
     header('Location: cles.php');
     exit;
 }
@@ -59,8 +64,33 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
             $message = '<div class="alert alert-danger">Clé introuvable.</div>';
         } else {
             if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_delete'])) {
+                $activatedMsg = '';
+                // Si la clé supprimée était active, il faut en activer une autre
+                if ($cle['active']) {
+                    // Cherche la précédente clé active (avant celle-ci)
+                    $stmtPrev = $pdo->prepare('SELECT id, nom FROM cles WHERE id < ? AND id != ? ORDER BY id DESC LIMIT 1');
+                    $stmtPrev->execute([$cle['id'], $cle['id']]);
+                    $prev = $stmtPrev->fetch(PDO::FETCH_ASSOC);
+                    if ($prev) {
+                        $pdo->prepare('UPDATE cles SET active = 1 WHERE id = ?')->execute([$prev['id']]);
+                        add_log('activation_auto_cle', $_SESSION['user']['id'] ?? 0, '', 'cle', $prev['id'], 'activation_auto', 'Activation automatique de la clé ID ' . $prev['id'] . ' après suppression', $_SERVER['REMOTE_ADDR']);
+                        $activatedMsg = '<div class="alert alert-info"><i class="bi bi-info-circle-fill me-2"></i> La clé <strong>' . htmlspecialchars($prev['nom']) . '</strong> a été activée automatiquement.</div>';
+                    } else {
+                        // Sinon, active la plus récente autre clé
+                        $stmtRecent = $pdo->prepare('SELECT id, nom FROM cles WHERE id != ? ORDER BY id DESC LIMIT 1');
+                        $stmtRecent->execute([$cle['id']]);
+                        $recent = $stmtRecent->fetch(PDO::FETCH_ASSOC);
+                        if ($recent) {
+                            $pdo->prepare('UPDATE cles SET active = 1 WHERE id = ?')->execute([$recent['id']]);
+                            add_log('activation_auto_cle', $_SESSION['user']['id'] ?? 0, '', 'cle', $recent['id'], 'activation_auto', 'Activation automatique de la clé ID ' . $recent['id'] . ' après suppression', $_SERVER['REMOTE_ADDR']);
+                            $activatedMsg = '<div class="alert alert-info"><i class="bi bi-info-circle-fill me-2"></i> La clé <strong>' . htmlspecialchars($recent['nom']) . '</strong> a été activée automatiquement.</div>';
+                        }
+                    }
+                }
                 $stmt = $pdo->prepare('DELETE FROM cles WHERE id = ?');
                 $stmt->execute([$id]);
+                add_log('suppression_cle', $_SESSION['user']['id'] ?? 0, '', 'cle', $id, 'suppression', 'Suppression de la clé ID ' . $id . ' (' . htmlspecialchars($cle['nom']) . ')', $_SERVER['REMOTE_ADDR']);
+                $_SESSION['action_message'] = '<div class="alert alert-success"><i class="bi bi-check-circle-fill me-2"></i> Clé supprimée avec succès.</div>' . $activatedMsg;
                 header('Location: cles.php?deleted=1');
                 exit;
             }
@@ -263,6 +293,9 @@ $cles = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </head>
 <body>
 <div class="container mt-4">
+    <?php if (!empty($_SESSION['action_message'])): ?>
+      <?= $_SESSION['action_message']; unset($_SESSION['action_message']); ?>
+    <?php endif; ?>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="mb-0"><i class="bi bi-key-fill"></i> Gestion des clés de chiffrement</h2>
         <a href="dashboard.php" class="btn btn-outline-secondary">
