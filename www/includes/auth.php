@@ -21,7 +21,7 @@ function secure_session() {
         $pdo->prepare('UPDATE utilisateurs SET derniere_connexion = NOW() WHERE id = ?')->execute([$_SESSION['user']['id']]);
         session_unset();
         session_destroy();
-        header('Location: /index.php?timeout=1');
+        header('Location: ../index.php?timeout=1');
         exit();
     }
     $_SESSION['last_activity'] = time();

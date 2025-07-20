@@ -52,6 +52,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Supprimer utilisateur</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+      body {
+        background: linear-gradient(120deg, #f7faff 0%, #e4ebf7 100%);
+        font-family: 'Inter', 'Nunito', Arial, sans-serif;
+      }
+      .container {
+        max-width: 500px;
+        background: #fff;
+        border-radius: 1.2rem;
+        box-shadow: 0 4px 18px rgba(220,53,69,0.10), 0 1px 4px rgba(0,0,0,0.04);
+        padding: 2.2rem 2rem 2rem 2rem;
+        margin-top: 4rem;
+      }
+      .alert-danger {
+        border-radius: 0.9rem;
+        font-size: 1.08rem;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        box-shadow: 0 2px 8px #dc354513;
+        background: linear-gradient(135deg, #dc3545 80%, #ffc107 100%);
+        color: #fff;
+        border: none;
+      }
+      .btn-danger {
+        background: linear-gradient(135deg, #dc3545 80%, #ffc107 100%) !important;
+        color: #fff !important;
+        border-radius: 0.7rem !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        box-shadow: 0 2px 8px #dc354533;
+        border: none !important;
+        transition: background 0.18s, color 0.18s, transform 0.18s;
+      }
+      .btn-danger:hover {
+        background: linear-gradient(135deg, #ffc107 80%, #dc3545 100%) !important;
+        color: #fff !important;
+        transform: scale(1.07);
+      }
+      .btn-secondary {
+        background: #e3e6f3 !important;
+        color: #0d6efd !important;
+        border-radius: 0.7rem !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        border: none !important;
+        box-shadow: 0 2px 8px #0d6efd33;
+        transition: background 0.18s, color 0.18s, transform 0.18s;
+      }
+      .btn-secondary:hover {
+        background: #0d6efd !important;
+        color: #fff !important;
+        transform: scale(1.07);
+      }
+    </style>
 </head>
 <body class="bg-light">
 <div class="container mt-5">

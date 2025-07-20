@@ -3,6 +3,8 @@ session_start();
 require '../includes/db.php';
 require '../includes/auth.php';
 include '../includes/dashboard-template.php';
+// Ajout du lien BNB Archive dans la sidebar
+ob_start();
 // Vérifie que le superadmin est connecté
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {
     header('Location: ../index.php');
@@ -90,7 +92,7 @@ $total_demande = $pdo->query("SELECT COUNT(*) FROM logs WHERE action = 'demande_
 // Ajout du nom de fichier pour téléchargement et consultation
 // Correction du nom de colonne pour le nom du fichier dans la table archives
 // Remplace 'a.nom' par 'a.filename' ou 'a.titre' selon la structure réelle
-$file_column = 'a.filename'; // à adapter si besoin
+$file_column = 'a.nom_fichier'; // à adapter si besoin
 try {
     $stmt_dl = $pdo->query("SELECT l.*, u.nom AS utilisateur_nom, u.email AS utilisateur_email, u.role AS utilisateur_role, $file_column AS fichier_nom
         FROM logs l 
@@ -150,6 +152,140 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     <title>Logs et statistiques</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+      body {
+        background: linear-gradient(120deg, #f7faff 0%, #e4ebf7 100%);
+        font-family: 'Inter', 'Nunito', Arial, sans-serif;
+      }
+      .container {
+        max-width: 1200px;
+        background: #fff;
+        border-radius: 1.2rem;
+        box-shadow: 0 4px 18px rgba(13,110,253,0.10), 0 1px 4px rgba(0,0,0,0.04);
+        padding: 2.2rem 2rem 2rem 2rem;
+        margin-top: 2.5rem;
+      }
+      h2 {
+        font-weight: 800;
+        color: #dc3545;
+        letter-spacing: 1px;
+        text-shadow: 0 2px 8px #dc354511;
+      }
+      h4 {
+        font-weight: 700;
+        color: #0d6efd;
+        margin-top: 2.2rem;
+        margin-bottom: 1.2rem;
+      }
+      .form-control, .form-select {
+        border-radius: 0.7rem;
+        font-size: 1.05rem;
+        padding: 0.7rem 1rem;
+        box-shadow: 0 1px 4px #0d6efd13;
+        border: 1px solid #e3e6f3;
+        transition: border 0.18s;
+      }
+      .form-control:focus, .form-select:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 2px 8px #0d6efd33;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #0d6efd 80%, #6f42c1 100%) !important;
+        color: #fff !important;
+        border-radius: 0.7rem !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        box-shadow: 0 2px 8px #0d6efd33;
+        border: none !important;
+        transition: background 0.18s, color 0.18s, transform 0.18s;
+      }
+      .btn-primary:hover {
+        background: linear-gradient(135deg, #6f42c1 80%, #0d6efd 100%) !important;
+        color: #fff !important;
+        transform: scale(1.07);
+      }
+      .btn-outline-success {
+        background: #fff !important;
+        color: #198754 !important;
+        border: 2px solid #198754 !important;
+        border-radius: 0.7rem !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        box-shadow: 0 2px 8px #19875433;
+        transition: background 0.18s, color 0.18s, transform 0.18s;
+      }
+      .btn-outline-success:hover {
+        background: #198754 !important;
+        color: #fff !important;
+        transform: scale(1.07);
+      }
+      .btn-outline-secondary {
+        background: #fff !important;
+        color: #0d6efd !important;
+        border: 2px solid #0d6efd !important;
+        border-radius: 0.7rem !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        box-shadow: 0 2px 8px #0d6efd33;
+        transition: background 0.18s, color 0.18s, transform 0.18s;
+      }
+      .btn-outline-secondary:hover {
+        background: #0d6efd !important;
+        color: #fff !important;
+        transform: scale(1.07);
+      }
+      .table {
+        border-radius: 1.2rem;
+        box-shadow: 0 4px 18px rgba(13,110,253,0.10), 0 1px 4px rgba(0,0,0,0.04);
+        overflow: hidden;
+        background: #fff;
+      }
+      thead th {
+        background: linear-gradient(135deg, #0d6efd 80%, #6f42c1 100%) !important;
+        color: #fff !important;
+        font-weight: 800;
+        font-size: 1rem;
+        letter-spacing: 0.3px;
+        border: none !important;
+      }
+      .table-danger th {
+        background: linear-gradient(135deg, #dc3545 80%, #ffc107 100%) !important;
+        color: #fff !important;
+        border: none !important;
+      }
+      tbody tr {
+        transition: box-shadow 0.18s, transform 0.18s, background 0.18s;
+        animation: rowFadeIn 0.7s;
+      }
+      @keyframes rowFadeIn {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      tbody tr:hover {
+        background: #eaf7fb !important;
+        box-shadow: 0 2px 8px #0dcaf033;
+        transform: scale(1.01);
+      }
+      .pagination .page-link {
+        border-radius: 0.7rem !important;
+        font-weight: 700 !important;
+        color: #0d6efd !important;
+        transition: background 0.18s, color 0.18s;
+      }
+      .pagination .page-item.active .page-link {
+        background: linear-gradient(135deg, #0d6efd 80%, #6f42c1 100%) !important;
+        color: #fff !important;
+        border: none !important;
+      }
+      .alert {
+        border-radius: 0.7rem;
+        font-size: 1.05rem;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        box-shadow: 0 2px 8px #0d6efd13;
+      }
+    </style>
 </head>
 <body>
 <div class="container mt-4">
@@ -233,7 +369,7 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
         </thead>
         <tbody>
             <?php
-            $stmt_alert = $pdo->query("SELECT l.*, u.nom AS utilisateur_nom FROM logs l LEFT JOIN utilisateurs u ON l.user_id = u.id WHERE l.statut = 'bloque' OR l.action IN ('tentative_suspecte', 'acces_expire', 'telechargement_refuse') ORDER BY l.timestamp DESC LIMIT 10");
+            $stmt_alert = $pdo->query("SELECT l.*, u.nom AS utilisateur_nom FROM logs l LEFT JOIN utilisateurs u ON l.user_id = u.id WHERE l.statut = 'bloque' OR l.action IN ('tentative_suspecte', 'acces_expire', 'telechargement_refuse', 'login_bloque') ORDER BY l.timestamp DESC LIMIT 10");
             foreach ($stmt_alert->fetchAll(PDO::FETCH_ASSOC) as $log): ?>
                 <tr>
                     <td><?= $log['timestamp'] ?></td>

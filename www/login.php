@@ -19,6 +19,7 @@ $now = time();
 
 if ($user) { 
     if ($user['tentatives_login'] >= 5 && strtotime($user['bloque_jusqu']) > $now) {
+        add_log('login_bloque', $user['id'], '', 'user', $user['id'], 'bloque', 'Compte bloqué', $_SERVER['REMOTE_ADDR']);
         $_SESSION['bloque'] = true;
         $_SESSION['bloque_message'] = '<div class="alert alert-danger d-flex align-items-center"><i class="bi bi-lock-fill me-2"></i> <strong>Compte bloqué !</strong> Réessayez dans <span id="timer" class="badge bg-warning text-dark"></span>.</div>';
         $_SESSION['bloque_expire'] = strtotime($user['bloque_jusqu']);

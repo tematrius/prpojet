@@ -99,7 +99,7 @@ if ($user['role'] === 'secretaire') {
 </head>
 <body>
     <div class="sidebar">
-        <h4><i class="bi bi-archive-fill me-2"></i>BNB Archives</h4>
+        <h4 style="color: white"><i class="bi bi-archive-fill me-2"></i>BNB Archives</h4>
         <hr>
         <?php if ($user['role'] === 'secretaire'): ?>
             <a href="ajouter-employe.php"><i class="bi bi-person-plus"></i> Ajouter Employé</a>
