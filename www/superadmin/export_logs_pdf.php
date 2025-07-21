@@ -3,7 +3,7 @@
 session_start();
 require '../includes/db.php';
 require '../includes/auth.php';
-require_once __DIR__ . '/../vendor/mpdf/mpdf.php'; // Chemin à adapter selon ton installation
+require_once __DIR__ . '/../../vendor/autoload.php'; // Utilise l'autoloader Composer
 
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {
     header('Location: ../index.php');
@@ -15,7 +15,7 @@ $user = $_GET['user'] ?? '';
 $action = $_GET['action'] ?? '';
 $date = $_GET['date'] ?? '';
 
-$mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'format' => 'A4']);
+$mpdf = new mPDF(['mode' => 'utf-8', 'format' => 'A4']); // Pour mPDF v6.x, pas de namespace
 $html = '<style>table {border-collapse:collapse;width:100%;font-size:12px;} th,td {border:1px solid #ccc;padding:6px;} th {background:#eee;}</style>';
 
 if ($type === 'conn') {
