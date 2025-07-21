@@ -12,6 +12,8 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'superadmin') {
 }
 
 // Filtres
+$sort_conn = $_GET['sort_conn'] ?? 'timestamp';
+$order_conn = $_GET['order_conn'] ?? 'desc';
 // Filtres
 $filtre_action = $_GET['action'] ?? '';
 $filtre_user = $_GET['user'] ?? '';
@@ -129,11 +131,14 @@ try {
     $logs_consult = [];
 }
 
+$allowed_conn = ['timestamp','utilisateur_nom','utilisateur_role','action','statut','message','ip_address'];
+$sort_col_conn = in_array($sort_conn, $allowed_conn) ? $sort_conn : 'timestamp';
+$order_dir_conn = strtolower($order_conn) === 'asc' ? 'ASC' : 'DESC';
 $stmt_conn = $pdo->query("SELECT l.*, u.nom AS utilisateur_nom, u.email AS utilisateur_email, u.role AS utilisateur_role
     FROM logs l 
     LEFT JOIN utilisateurs u ON l.user_id = u.id 
     WHERE l.action IN ('login_succes', 'logout') 
-    ORDER BY l.timestamp DESC 
+    ORDER BY $sort_col_conn $order_dir_conn 
     LIMIT $limit_conn OFFSET $offset_conn");
 $logs_conn = $stmt_conn->fetchAll(PDO::FETCH_ASSOC);
 
@@ -289,13 +294,19 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
 </head>
 <body>
 <div class="container mt-4">
+    <div id="loaderSpinner" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(255,255,255,0.7); z-index:9999; align-items:center; justify-content:center;">
+        <div class="d-flex flex-column align-items-center justify-content-center" style="height:100vh;">
+            <div class="spinner-border text-primary" style="width:3rem; height:3rem;" role="status"></div>
+            <div class="mt-3 text-primary fw-bold">Chargement...</div>
+        </div>
+    </div>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="mb-0"><i class="bi bi-journal-text"></i> Logs et statistiques</h2>
         <a href="dashboard.php" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> Retour au dashboard
         </a>
     </div>
-    <form method="get" class="row g-2 mb-3">
+    <form method="get" class="row g-2 mb-3" id="mainFilterForm">
         <div class="col">
             <input type="text" name="user" class="form-control" placeholder="Utilisateur" value="<?= htmlspecialchars($filtre_user) ?>">
         </div>
@@ -314,17 +325,90 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
             <input type="date" name="date" class="form-control" value="<?= htmlspecialchars($filtre_date) ?>">
         </div>
         <div class="col">
-            <input type="text" name="search" class="form-control" placeholder="Recherche rapide (mot-clé)">
+            <input type="text" name="search" class="form-control" id="quickSearchInput" placeholder="Recherche rapide (mot-clé)" value="<?= htmlspecialchars($filtre_search) ?>">
         </div>
-        <div class="col">
+        <div class="col d-flex gap-2">
             <button class="btn btn-primary">Filtrer</button>
+            <button type="button" class="btn btn-outline-secondary" id="resetFiltersBtn">Réinitialiser</button>
         </div>
         <div class="col">
             <a href="export_logs.php?user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-success"><i class="bi bi-file-earmark-arrow-down"></i> Export CSV</a>
         </div>
     </form>
+    <script>
+    // Spinner/loader
+    function showLoader() {
+        document.getElementById('loaderSpinner').style.display = 'flex';
+    }
+    function hideLoader() {
+        document.getElementById('loaderSpinner').style.display = 'none';
+    }
+    window.addEventListener('pageshow', hideLoader);
+    // Barre de recherche rapide avec délai (debounce)
+    let searchTimeout;
+    document.getElementById('quickSearchInput').addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            showLoader();
+            document.getElementById('mainFilterForm').submit();
+        }, 400); // 400ms après la dernière frappe
+    });
+    // Bouton réinitialiser les filtres
+    document.getElementById('resetFiltersBtn').addEventListener('click', function() {
+        document.querySelector('input[name="user"]').value = '';
+        document.querySelector('select[name="action"]').value = '';
+        document.querySelector('input[name="date"]').value = '';
+        document.getElementById('quickSearchInput').value = '';
+        showLoader();
+        document.getElementById('mainFilterForm').submit();
+    });
+    // Affiche le loader lors de la soumission du formulaire principal
+    document.getElementById('mainFilterForm').addEventListener('submit', function() {
+        showLoader();
+    });
+    </script>
     <!-- Actions administratives -->
     <h4 class="mt-4"><i class="bi bi-person-badge"></i> Actions administratives</h4>
+    <div class="mb-2 text-end text-secondary" style="font-size:0.98rem;">Total : <?= $total_admin = $pdo->query("SELECT COUNT(*) FROM logs WHERE action LIKE 'admin_%'")->fetchColumn(); ?> actions administratives</div>
+    <form method="get" class="mb-2">
+        <input type="hidden" name="user" value="<?= htmlspecialchars($filtre_user) ?>">
+        <input type="hidden" name="action" value="<?= htmlspecialchars($filtre_action) ?>">
+        <input type="hidden" name="date" value="<?= htmlspecialchars($filtre_date) ?>">
+        <label>Afficher :
+            <select name="limit_admin" onchange="this.form.submit()" class="form-select d-inline w-auto">
+                <option value="5" <?= ($_GET['limit_admin'] ?? 10) == 5 ? 'selected' : '' ?>>5</option>
+                <option value="10" <?= ($_GET['limit_admin'] ?? 10) == 10 ? 'selected' : '' ?>>10</option>
+                <option value="20" <?= ($_GET['limit_admin'] ?? 10) == 20 ? 'selected' : '' ?>>20</option>
+                <option value="50" <?= ($_GET['limit_admin'] ?? 10) == 50 ? 'selected' : '' ?>>50</option>
+            </select> actions
+        </label>
+    </form>
+    <nav>
+        <ul class="pagination">
+            <?php $limit_admin = isset($_GET['limit_admin']) ? intval($_GET['limit_admin']) : 10;
+            $page_admin = isset($_GET['page_admin']) ? max(1, intval($_GET['page_admin'])) : 1;
+            $max_page_admin = ceil($total_admin / $limit_admin);
+            $offset_admin = ($page_admin - 1) * $limit_admin;
+            ?>
+            <li class="page-item <?= $page_admin == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_admin=<?= $limit_admin ?>&page_admin=1&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&laquo;</a>
+            </li>
+            <li class="page-item <?= $page_admin == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_admin=<?= $limit_admin ?>&page_admin=<?= $page_admin-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
+            </li>
+            <?php for ($i = 1; $i <= $max_page_admin; $i++): ?>
+                <li class="page-item <?= $i == $page_admin ? 'active' : '' ?>">
+                    <a class="page-link" href="?limit_admin=<?= $limit_admin ?>&page_admin=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
+                </li>
+            <?php endfor; ?>
+            <li class="page-item <?= $page_admin == $max_page_admin ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_admin=<?= $limit_admin ?>&page_admin=<?= $page_admin+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
+            </li>
+            <li class="page-item <?= $page_admin == $max_page_admin ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_admin=<?= $limit_admin ?>&page_admin=<?= $max_page_admin ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&raquo;</a>
+            </li>
+        </ul>
+    </nav>
     <table class="table table-bordered align-middle mb-4">
         <thead class="table-light">
             <tr>
@@ -338,16 +422,28 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
         </thead>
         <tbody>
             <?php
-            $stmt_admin = $pdo->query("SELECT l.timestamp, u.nom AS admin_nom, l.action, l.type_cible AS cible, l.statut, l.ip_address
+    $stmt_admin = $pdo->query("SELECT l.timestamp, u.nom AS admin_nom, l.action, l.type_cible AS cible, l.statut, l.ip_address
                 FROM logs l LEFT JOIN utilisateurs u ON l.user_id = u.id
-                WHERE l.action LIKE 'admin_%' ORDER BY l.timestamp DESC LIMIT 10");
+                WHERE l.action LIKE 'admin_%' ORDER BY l.timestamp DESC LIMIT $limit_admin OFFSET $offset_admin");
             foreach ($stmt_admin->fetchAll(PDO::FETCH_ASSOC) as $log): ?>
                 <tr>
                     <td><?= $log['timestamp'] ?></td>
                     <td><?= htmlspecialchars($log['admin_nom'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($log['action']) ?></td>
                     <td><?= htmlspecialchars($log['cible']) ?></td>
-                    <td><?= htmlspecialchars($log['statut']) ?></td>
+                    <td>
+                        <?php if ($log['statut'] === 'bloque'): ?>
+                            <span class="badge bg-danger">Bloqué</span>
+                        <?php elseif ($log['statut'] === 'refuse'): ?>
+                            <span class="badge bg-warning text-dark">Refusé</span>
+                        <?php elseif ($log['statut'] === 'accepte'): ?>
+                            <span class="badge bg-success">Accepté</span>
+                        <?php elseif ($log['statut']): ?>
+                            <span class="badge bg-info text-light"><?= htmlspecialchars($log['statut']) ?></span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($log['ip_address']) ?></td>
                 </tr>
             <?php endforeach; ?>
@@ -356,6 +452,46 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
 
     <!-- Alertes et logs critiques -->
     <h4 class="mt-4"><i class="bi bi-exclamation-triangle"></i> Alertes et logs critiques</h4>
+    <div class="mb-2 text-end text-danger" style="font-size:0.98rem;">Total : <?= $total_alert = $pdo->query("SELECT COUNT(*) FROM logs WHERE statut = 'bloque' OR action IN ('tentative_suspecte', 'acces_expire', 'telechargement_refuse', 'login_bloque')")->fetchColumn(); ?> alertes</div>
+    <form method="get" class="mb-2">
+        <input type="hidden" name="user" value="<?= htmlspecialchars($filtre_user) ?>">
+        <input type="hidden" name="action" value="<?= htmlspecialchars($filtre_action) ?>">
+        <input type="hidden" name="date" value="<?= htmlspecialchars($filtre_date) ?>">
+        <label>Afficher :
+            <select name="limit_alert" onchange="this.form.submit()" class="form-select d-inline w-auto">
+                <option value="5" <?= ($_GET['limit_alert'] ?? 10) == 5 ? 'selected' : '' ?>>5</option>
+                <option value="10" <?= ($_GET['limit_alert'] ?? 10) == 10 ? 'selected' : '' ?>>10</option>
+                <option value="20" <?= ($_GET['limit_alert'] ?? 10) == 20 ? 'selected' : '' ?>>20</option>
+                <option value="50" <?= ($_GET['limit_alert'] ?? 10) == 50 ? 'selected' : '' ?>>50</option>
+            </select> alertes
+        </label>
+    </form>
+    <nav>
+        <ul class="pagination">
+            <?php $limit_alert = isset($_GET['limit_alert']) ? intval($_GET['limit_alert']) : 10;
+            $page_alert = isset($_GET['page_alert']) ? max(1, intval($_GET['page_alert'])) : 1;
+            $max_page_alert = ceil($total_alert / $limit_alert);
+            $offset_alert = ($page_alert - 1) * $limit_alert;
+            ?>
+            <li class="page-item <?= $page_alert == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_alert=<?= $limit_alert ?>&page_alert=1&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&laquo;</a>
+            </li>
+            <li class="page-item <?= $page_alert == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_alert=<?= $limit_alert ?>&page_alert=<?= $page_alert-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
+            </li>
+            <?php for ($i = 1; $i <= $max_page_alert; $i++): ?>
+                <li class="page-item <?= $i == $page_alert ? 'active' : '' ?>">
+                    <a class="page-link" href="?limit_alert=<?= $limit_alert ?>&page_alert=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
+                </li>
+            <?php endfor; ?>
+            <li class="page-item <?= $page_alert == $max_page_alert ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_alert=<?= $limit_alert ?>&page_alert=<?= $page_alert+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
+            </li>
+            <li class="page-item <?= $page_alert == $max_page_alert ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_alert=<?= $limit_alert ?>&page_alert=<?= $max_page_alert ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&raquo;</a>
+            </li>
+        </ul>
+    </nav>
     <table class="table table-bordered align-middle mb-4">
         <thead class="table-danger">
             <tr>
@@ -369,14 +505,26 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
         </thead>
         <tbody>
             <?php
-            $stmt_alert = $pdo->query("SELECT l.*, u.nom AS utilisateur_nom FROM logs l LEFT JOIN utilisateurs u ON l.user_id = u.id WHERE l.statut = 'bloque' OR l.action IN ('tentative_suspecte', 'acces_expire', 'telechargement_refuse', 'login_bloque') ORDER BY l.timestamp DESC LIMIT 10");
+    $stmt_alert = $pdo->query("SELECT l.*, u.nom AS utilisateur_nom FROM logs l LEFT JOIN utilisateurs u ON l.user_id = u.id WHERE l.statut = 'bloque' OR l.action IN ('tentative_suspecte', 'acces_expire', 'telechargement_refuse', 'login_bloque') ORDER BY l.timestamp DESC LIMIT $limit_alert OFFSET $offset_alert");
             foreach ($stmt_alert->fetchAll(PDO::FETCH_ASSOC) as $log): ?>
                 <tr>
                     <td><?= $log['timestamp'] ?></td>
                     <td><?= htmlspecialchars($log['utilisateur_nom'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($log['action']) ?></td>
                     <td><?= htmlspecialchars($log['message']) ?></td>
-                    <td><?= htmlspecialchars($log['statut']) ?></td>
+                    <td>
+                        <?php if ($log['statut'] === 'bloque'): ?>
+                            <span class="badge bg-danger">Bloqué</span>
+                        <?php elseif ($log['statut'] === 'refuse'): ?>
+                            <span class="badge bg-warning text-dark">Refusé</span>
+                        <?php elseif ($log['statut'] === 'accepte'): ?>
+                            <span class="badge bg-success">Accepté</span>
+                        <?php elseif ($log['statut']): ?>
+                            <span class="badge bg-info text-light"><?= htmlspecialchars($log['statut']) ?></span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($log['ip_address']) ?></td>
                 </tr>
             <?php endforeach; ?>
@@ -384,6 +532,13 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     </table>
 
     <h4 class="mt-4"><i class="bi bi-person-check"></i> Connexions / Déconnexions</h4>
+    <div class="mb-2 d-flex justify-content-between align-items-center">
+        <span class="text-secondary" style="font-size:0.98rem;">Total : <?= $total_conn ?> connexions/déconnexions</span>
+        <div>
+            <a href="export_logs_table.php?type=conn&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-success btn-sm me-1"><i class="bi bi-file-earmark-arrow-down"></i> Export CSV</a>
+            <a href="export_logs_pdf.php?type=conn&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf"></i> Export PDF</a>
+        </div>
+    </div>
     <form method="get" class="mb-2">
         <input type="hidden" name="user" value="<?= htmlspecialchars($filtre_user) ?>">
         <input type="hidden" name="action" value="<?= htmlspecialchars($filtre_action) ?>">
@@ -399,12 +554,24 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     </form>
     <nav>
         <ul class="pagination">
+            <li class="page-item <?= $page_conn == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_conn=<?= $limit_conn ?>&page_conn=1&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&laquo;</a>
+            </li>
+            <li class="page-item <?= $page_conn == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_conn=<?= $limit_conn ?>&page_conn=<?= $page_conn-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
+            </li>
             <?php $max_page_conn = ceil($total_conn / $limit_conn); ?>
             <?php for ($i = 1; $i <= $max_page_conn; $i++): ?>
                 <li class="page-item <?= $i == $page_conn ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_conn=<?= $limit_conn ?>&page_conn=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
             <?php endfor; ?>
+            <li class="page-item <?= $page_conn == $max_page_conn ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_conn=<?= $limit_conn ?>&page_conn=<?= $page_conn+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
+            </li>
+            <li class="page-item <?= $page_conn == $max_page_conn ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_conn=<?= $limit_conn ?>&page_conn=<?= $max_page_conn ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&raquo;</a>
+            </li>
         </ul>
     </nav>
     <table class="table table-bordered align-middle mb-4">
@@ -429,7 +596,19 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
                     </td>
                     <td><?= htmlspecialchars($log['utilisateur_role'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($log['action']) ?></td>
-                    <td><?= htmlspecialchars($log['statut']) ?></td>
+                    <td>
+                        <?php if ($log['statut'] === 'bloque'): ?>
+                            <span class="badge bg-danger">Bloqué</span>
+                        <?php elseif ($log['statut'] === 'refuse'): ?>
+                            <span class="badge bg-warning text-dark">Refusé</span>
+                        <?php elseif ($log['statut'] === 'accepte'): ?>
+                            <span class="badge bg-success">Accepté</span>
+                        <?php elseif ($log['statut']): ?>
+                            <span class="badge bg-info text-light"><?= htmlspecialchars($log['statut']) ?></span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($log['message']) ?></td>
                     <td><?= htmlspecialchars($log['ip_address']) ?></td>
                 </tr>
@@ -438,6 +617,13 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     </table>
 
     <h4 class="mt-4"><i class="bi bi-file-earmark-arrow-down"></i> Téléchargements</h4>
+    <div class="mb-2 d-flex justify-content-between align-items-center">
+        <span class="text-secondary" style="font-size:0.98rem;">Total : <?= $total_dl ?> téléchargements</span>
+        <div>
+            <a href="export_logs_table.php?type=dl&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-success btn-sm me-1"><i class="bi bi-file-earmark-arrow-down"></i> Export CSV</a>
+            <a href="export_logs_pdf.php?type=dl&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf"></i> Export PDF</a>
+        </div>
+    </div>
     <form method="get" class="mb-2">
         <input type="hidden" name="user" value="<?= htmlspecialchars($filtre_user) ?>">
         <input type="hidden" name="action" value="<?= htmlspecialchars($filtre_action) ?>">
@@ -453,12 +639,24 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     </form>
     <nav>
         <ul class="pagination">
+            <li class="page-item <?= $page_dl == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_dl=<?= $limit_dl ?>&page_dl=1&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&laquo;</a>
+            </li>
+            <li class="page-item <?= $page_dl == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_dl=<?= $limit_dl ?>&page_dl=<?= $page_dl-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
+            </li>
             <?php $max_page_dl = ceil($total_dl / $limit_dl); ?>
             <?php for ($i = 1; $i <= $max_page_dl; $i++): ?>
                 <li class="page-item <?= $i == $page_dl ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_dl=<?= $limit_dl ?>&page_dl=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
             <?php endfor; ?>
+            <li class="page-item <?= $page_dl == $max_page_dl ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_dl=<?= $limit_dl ?>&page_dl=<?= $page_dl+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
+            </li>
+            <li class="page-item <?= $page_dl == $max_page_dl ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_dl=<?= $limit_dl ?>&page_dl=<?= $max_page_dl ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&raquo;</a>
+            </li>
         </ul>
     </nav>
     <table class="table table-bordered align-middle mb-4">
@@ -481,7 +679,19 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
                     <td><?= htmlspecialchars($log['utilisateur_role'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($log['fichier_nom'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($log['target_id']) ?></td>
-                    <td><?= htmlspecialchars($log['statut']) ?></td>
+                    <td>
+                        <?php if ($log['statut'] === 'bloque'): ?>
+                            <span class="badge bg-danger">Bloqué</span>
+                        <?php elseif ($log['statut'] === 'refuse'): ?>
+                            <span class="badge bg-warning text-dark">Refusé</span>
+                        <?php elseif ($log['statut'] === 'accepte'): ?>
+                            <span class="badge bg-success">Accepté</span>
+                        <?php elseif ($log['statut']): ?>
+                            <span class="badge bg-info text-light"><?= htmlspecialchars($log['statut']) ?></span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($log['ip_address']) ?></td>
                 </tr>
             <?php endforeach; ?>
@@ -489,6 +699,13 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     </table>
 
     <h4 class="mt-4"><i class="bi bi-eye"></i> Consultations</h4>
+    <div class="mb-2 d-flex justify-content-between align-items-center">
+        <span class="text-secondary" style="font-size:0.98rem;">Total : <?= $total_consult ?> consultations</span>
+        <div>
+            <a href="export_logs_table.php?type=consult&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-success btn-sm me-1"><i class="bi bi-file-earmark-arrow-down"></i> Export CSV</a>
+            <a href="export_logs_pdf.php?type=consult&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf"></i> Export PDF</a>
+        </div>
+    </div>
     <form method="get" class="mb-2">
         <input type="hidden" name="user" value="<?= htmlspecialchars($filtre_user) ?>">
         <input type="hidden" name="action" value="<?= htmlspecialchars($filtre_action) ?>">
@@ -504,12 +721,24 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     </form>
     <nav>
         <ul class="pagination">
+            <li class="page-item <?= $page_consult == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_consult=<?= $limit_consult ?>&page_consult=1&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&laquo;</a>
+            </li>
+            <li class="page-item <?= $page_consult == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_consult=<?= $limit_consult ?>&page_consult=<?= $page_consult-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
+            </li>
             <?php $max_page_consult = ceil($total_consult / $limit_consult); ?>
             <?php for ($i = 1; $i <= $max_page_consult; $i++): ?>
                 <li class="page-item <?= $i == $page_consult ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_consult=<?= $limit_consult ?>&page_consult=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
             <?php endfor; ?>
+            <li class="page-item <?= $page_consult == $max_page_consult ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_consult=<?= $limit_consult ?>&page_consult=<?= $page_consult+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
+            </li>
+            <li class="page-item <?= $page_consult == $max_page_consult ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_consult=<?= $limit_consult ?>&page_consult=<?= $max_page_consult ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&raquo;</a>
+            </li>
         </ul>
     </nav>
     <table class="table table-bordered align-middle mb-4">
@@ -538,6 +767,13 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     </table>
 
     <h4 class="mt-4"><i class="bi bi-envelope-paper"></i> Demandes d'accès</h4>
+    <div class="mb-2 d-flex justify-content-between align-items-center">
+        <span class="text-secondary" style="font-size:0.98rem;">Total : <?= $total_demande ?> demandes d'accès</span>
+        <div>
+            <a href="export_logs_table.php?type=demande&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-success btn-sm me-1"><i class="bi bi-file-earmark-arrow-down"></i> Export CSV</a>
+            <a href="export_logs_pdf.php?type=demande&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf"></i> Export PDF</a>
+        </div>
+    </div>
     <form method="get" class="mb-2">
         <input type="hidden" name="user" value="<?= htmlspecialchars($filtre_user) ?>">
         <input type="hidden" name="action" value="<?= htmlspecialchars($filtre_action) ?>">
@@ -553,12 +789,24 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     </form>
     <nav>
         <ul class="pagination">
+            <li class="page-item <?= $page_demande == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_demande=<?= $limit_demande ?>&page_demande=1&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&laquo;</a>
+            </li>
+            <li class="page-item <?= $page_demande == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_demande=<?= $limit_demande ?>&page_demande=<?= $page_demande-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
+            </li>
             <?php $max_page_demande = ceil($total_demande / $limit_demande); ?>
             <?php for ($i = 1; $i <= $max_page_demande; $i++): ?>
                 <li class="page-item <?= $i == $page_demande ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_demande=<?= $limit_demande ?>&page_demande=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
             <?php endfor; ?>
+            <li class="page-item <?= $page_demande == $max_page_demande ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_demande=<?= $limit_demande ?>&page_demande=<?= $page_demande+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
+            </li>
+            <li class="page-item <?= $page_demande == $max_page_demande ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_demande=<?= $limit_demande ?>&page_demande=<?= $max_page_demande ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&raquo;</a>
+            </li>
         </ul>
     </nav>
     <table class="table table-bordered align-middle mb-4">
@@ -581,7 +829,19 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
                     <td><?= htmlspecialchars($log['utilisateur_role'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($log['message']) ?></td>
                     <td><?= htmlspecialchars($log['target_id']) ?></td>
-                    <td><?= htmlspecialchars($log['statut']) ?></td>
+                    <td>
+                        <?php if ($log['statut'] === 'bloque'): ?>
+                            <span class="badge bg-danger">Bloqué</span>
+                        <?php elseif ($log['statut'] === 'refuse'): ?>
+                            <span class="badge bg-warning text-dark">Refusé</span>
+                        <?php elseif ($log['statut'] === 'accepte'): ?>
+                            <span class="badge bg-success">Accepté</span>
+                        <?php elseif ($log['statut']): ?>
+                            <span class="badge bg-info text-light"><?= htmlspecialchars($log['statut']) ?></span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($log['ip_address']) ?></td>
                 </tr>
             <?php endforeach; ?>
@@ -591,6 +851,13 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     <!-- Suppression du tableau logs filtrés -->
 
     <h4 class="mt-4"><i class="bi bi-journal-text"></i> Tous les logs</h4>
+    <div class="mb-2 d-flex justify-content-between align-items-center">
+        <span class="text-secondary" style="font-size:0.98rem;">Total : <?= $total_logs ?> logs</span>
+        <div>
+            <a href="export_logs_table.php?type=logs&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-success btn-sm me-1"><i class="bi bi-file-earmark-arrow-down"></i> Export CSV</a>
+            <a href="export_logs_pdf.php?type=logs&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf"></i> Export PDF</a>
+        </div>
+    </div>
     <form method="get" class="mb-2">
         <input type="hidden" name="user" value="<?= htmlspecialchars($filtre_user) ?>">
         <input type="hidden" name="action" value="<?= htmlspecialchars($filtre_action) ?>">
@@ -606,12 +873,24 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
     </form>
     <nav>
         <ul class="pagination">
+            <li class="page-item <?= $page_logs == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_logs=<?= $limit_logs ?>&page_logs=1&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&laquo;</a>
+            </li>
+            <li class="page-item <?= $page_logs == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_logs=<?= $limit_logs ?>&page_logs=<?= $page_logs-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
+            </li>
             <?php $max_page_logs = ceil($total_logs / $limit_logs); ?>
             <?php for ($i = 1; $i <= $max_page_logs; $i++): ?>
                 <li class="page-item <?= $i == $page_logs ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_logs=<?= $limit_logs ?>&page_logs=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
             <?php endfor; ?>
+            <li class="page-item <?= $page_logs == $max_page_logs ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_logs=<?= $limit_logs ?>&page_logs=<?= $page_logs+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
+            </li>
+            <li class="page-item <?= $page_logs == $max_page_logs ? 'disabled' : '' ?>">
+                <a class="page-link" href="?limit_logs=<?= $limit_logs ?>&page_logs=<?= $max_page_logs ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&raquo;</a>
+            </li>
         </ul>
     </nav>
     <table class="table table-bordered align-middle">
@@ -638,7 +917,19 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
                     <td><?= htmlspecialchars($log['utilisateur_role'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($log['action']) ?></td>
                     <td><?= htmlspecialchars($log['type_cible']) ?> #<?= htmlspecialchars($log['target_id']) ?></td>
-                    <td><?= htmlspecialchars($log['statut']) ?></td>
+                    <td>
+                        <?php if ($log['statut'] === 'bloque'): ?>
+                            <span class="badge bg-danger">Bloqué</span>
+                        <?php elseif ($log['statut'] === 'refuse'): ?>
+                            <span class="badge bg-warning text-dark">Refusé</span>
+                        <?php elseif ($log['statut'] === 'accepte'): ?>
+                            <span class="badge bg-success">Accepté</span>
+                        <?php elseif ($log['statut']): ?>
+                            <span class="badge bg-info text-light"><?= htmlspecialchars($log['statut']) ?></span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($log['message']) ?></td>
                     <td><?= htmlspecialchars($log['ip_address']) ?></td>
                 </tr>

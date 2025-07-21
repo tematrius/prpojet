@@ -25,7 +25,19 @@ $stats['top_users'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $stmt = $pdo->query("SELECT COUNT(*) FROM logs WHERE action = 'telechargement'");
 $stats['total_telechargements'] = $stmt->fetchColumn();
 $stmt = $pdo->query("SELECT COUNT(*) FROM logs WHERE action = 'consultation'");
+
 $stats['total_consultations'] = $stmt->fetchColumn();
+
+// Prépare les données pour le graphique évolution des fichiers
+$fichiers_evo = $pdo->query("SELECT DATE_FORMAT(date_upload, '%Y-%m') as mois, COUNT(*) as nb FROM archives GROUP BY mois ORDER BY mois ASC")->fetchAll(PDO::FETCH_ASSOC);
+$mois_fichiers = [];
+$cumul_fichiers = [];
+$total = 0;
+foreach ($fichiers_evo as $row) {
+    $mois_fichiers[] = $row['mois'];
+    $total += $row['nb'];
+    $cumul_fichiers[] = $total;
+}
 
 // Récupère le nombre de fichiers chiffrés par clé
 $cles_stats = $pdo->query("SELECT c.nom, COUNT(a.id) as total FROM cles c LEFT JOIN archives a ON a.id_cle = c.id GROUP BY c.id ORDER BY c.date_creation ASC")->fetchAll(PDO::FETCH_ASSOC);
@@ -565,21 +577,31 @@ foreach ($mois_blocage as $mois) {
       <div class="col-md-6">
         <div class="card stat-card" data-glossy="true" style="min-height: 350px; height: 100%;">
           <div class="card-body d-flex flex-column align-items-center justify-content-center" style="height: 100%; width: 100%; padding: 0.7rem 1rem;">
-            <div class="section-title" style="margin-bottom: 0.7rem;"><i class="bi bi-pie-chart"></i> Répartition des rôles</div>
+            <div class="section-title" style="margin-bottom: 0.7rem;"><i class="bi bi-graph-up"></i> Évolution du nombre de fichiers (cumulé)</div>
             <div style="width:100%; height:260px; display:flex; align-items:center; justify-content:center;">
-              <canvas id="rolesChart" height="260" style="width:100% !important; height:260px !important; max-width:100%;"></canvas>
+              <canvas id="fichiersChart" height="260" style="width:100% !important; height:260px !important; max-width:100%;"></canvas>
             </div>
           </div>
         </div>
       </div>
     </div>
     <div class="row g-4 mb-4">
-      <div class="col-md-12">
+      <div class="col-md-6">
         <div class="card stat-card" data-glossy="true">
           <div class="card-body d-flex flex-column align-items-center justify-content-center" style="height: 100%; width: 100%; padding: 0.7rem 1rem;">
             <div class="section-title" style="margin-bottom: 0.7rem;"><i class="bi bi-shield-lock"></i> Blocages et déblocages de comptes (par mois)</div>
             <div style="width:100%; height:260px; display:flex; align-items:center; justify-content:center;">
               <canvas id="blocagesChart" height="260" style="width:100% !important; height:260px !important; max-width:100%;"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card stat-card" data-glossy="true">
+          <div class="card-body d-flex flex-column align-items-center justify-content-center" style="height: 100%; width: 100%; padding: 0.7rem 1rem;">
+            <div class="section-title" style="margin-bottom: 0.7rem;"><i class="bi bi-people"></i> Répartition des utilisateurs par rôle</div>
+            <div style="width:100%; height:260px; display:flex; align-items:center; justify-content:center;">
+              <canvas id="rolesChart" height="260" style="width:100% !important; height:260px !important; max-width:100%;"></canvas>
             </div>
           </div>
         </div>
@@ -614,7 +636,33 @@ foreach ($mois_blocage as $mois) {
         }
       }
     });
-    // Graphique blocages/déblocages de comptes
+    // Graphique évolution du nombre de fichiers (cumulé)
+    const ctxFichiers = document.getElementById('fichiersChart').getContext('2d');
+    new Chart(ctxFichiers, {
+      type: 'line',
+      data: {
+        labels: <?php echo json_encode($mois_fichiers); ?>,
+        datasets: [{
+          label: 'Nombre total de fichiers',
+          data: <?php echo json_encode($cumul_fichiers); ?>,
+          borderColor: '#0d6efd',
+          backgroundColor: 'rgba(13,110,253,0.15)',
+          tension: 0.3,
+          pointRadius: 4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
     const ctxBlocages = document.getElementById('blocagesChart').getContext('2d');
     new Chart(ctxBlocages, {
       type: 'line',
