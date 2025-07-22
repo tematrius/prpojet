@@ -48,20 +48,26 @@ if ($filtre_search) {
     for ($i = 0; $i < 6; $i++) $params[] = "%$filtre_search%";
 }
 $sql_count = "SELECT COUNT(*) FROM logs l LEFT JOIN utilisateurs u ON l.user_id = u.id WHERE 1";
+$params_count = [];
 if ($filtre_action) {
-    $sql_count .= " AND l.action = '" . addslashes($filtre_action) . "'";
+    $sql_count .= " AND l.action = ?";
+    $params_count[] = $filtre_action;
 }
 if ($filtre_user) {
-    $sql_count .= " AND u.nom LIKE '%" . addslashes($filtre_user) . "%'";
+    $sql_count .= " AND u.nom LIKE ?";
+    $params_count[] = "%$filtre_user%";
 }
 if ($filtre_date) {
-    $sql_count .= " AND DATE(l.timestamp) = '" . addslashes($filtre_date) . "'";
+    $sql_count .= " AND DATE(l.timestamp) = ?";
+    $params_count[] = $filtre_date;
 }
 if ($filtre_search) {
-    $search = addslashes($filtre_search);
-    $sql_count .= " AND (u.nom LIKE '%$search%' OR u.email LIKE '%$search%' OR l.message LIKE '%$search%' OR l.action LIKE '%$search%' OR l.type_cible LIKE '%$search%' OR l.target_id LIKE '%$search%')";
+    $sql_count .= " AND (u.nom LIKE ? OR u.email LIKE ? OR l.message LIKE ? OR l.action LIKE ? OR l.type_cible LIKE ? OR l.target_id LIKE ?)";
+    for ($i = 0; $i < 6; $i++) $params_count[] = "%$filtre_search%";
 }
-$total_logs = $pdo->query($sql_count)->fetchColumn();
+$stmt_count = $pdo->prepare($sql_count);
+$stmt_count->execute($params_count);
+$total_logs = $stmt_count->fetchColumn();
 $sql .= " ORDER BY l.timestamp DESC LIMIT $limit_logs OFFSET $offset_logs";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
@@ -396,11 +402,22 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
             <li class="page-item <?= $page_admin == 1 ? 'disabled' : '' ?>">
                 <a class="page-link" href="?limit_admin=<?= $limit_admin ?>&page_admin=<?= $page_admin-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
             </li>
-            <?php for ($i = 1; $i <= $max_page_admin; $i++): ?>
+            <?php
+            $window = 2;
+            $start = max(1, $page_admin - $window);
+            $end = min($max_page_admin, $page_admin + $window);
+            if ($start > 1) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            for ($i = $start; $i <= $end; $i++): ?>
                 <li class="page-item <?= $i == $page_admin ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_admin=<?= $limit_admin ?>&page_admin=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
-            <?php endfor; ?>
+            <?php endfor;
+            if ($end < $max_page_admin) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            ?>
             <li class="page-item <?= $page_admin == $max_page_admin ? 'disabled' : '' ?>">
                 <a class="page-link" href="?limit_admin=<?= $limit_admin ?>&page_admin=<?= $page_admin+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
             </li>
@@ -479,11 +496,22 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
             <li class="page-item <?= $page_alert == 1 ? 'disabled' : '' ?>">
                 <a class="page-link" href="?limit_alert=<?= $limit_alert ?>&page_alert=<?= $page_alert-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
             </li>
-            <?php for ($i = 1; $i <= $max_page_alert; $i++): ?>
+            <?php
+            $window = 2;
+            $start = max(1, $page_alert - $window);
+            $end = min($max_page_alert, $page_alert + $window);
+            if ($start > 1) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            for ($i = $start; $i <= $end; $i++): ?>
                 <li class="page-item <?= $i == $page_alert ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_alert=<?= $limit_alert ?>&page_alert=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
-            <?php endfor; ?>
+            <?php endfor;
+            if ($end < $max_page_alert) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            ?>
             <li class="page-item <?= $page_alert == $max_page_alert ? 'disabled' : '' ?>">
                 <a class="page-link" href="?limit_alert=<?= $limit_alert ?>&page_alert=<?= $page_alert+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
             </li>
@@ -561,11 +589,22 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
                 <a class="page-link" href="?limit_conn=<?= $limit_conn ?>&page_conn=<?= $page_conn-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
             </li>
             <?php $max_page_conn = ceil($total_conn / $limit_conn); ?>
-            <?php for ($i = 1; $i <= $max_page_conn; $i++): ?>
+            <?php
+            $window = 2;
+            $start = max(1, $page_conn - $window);
+            $end = min($max_page_conn, $page_conn + $window);
+            if ($start > 1) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            for ($i = $start; $i <= $end; $i++): ?>
                 <li class="page-item <?= $i == $page_conn ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_conn=<?= $limit_conn ?>&page_conn=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
-            <?php endfor; ?>
+            <?php endfor;
+            if ($end < $max_page_conn) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            ?>
             <li class="page-item <?= $page_conn == $max_page_conn ? 'disabled' : '' ?>">
                 <a class="page-link" href="?limit_conn=<?= $limit_conn ?>&page_conn=<?= $page_conn+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
             </li>
@@ -646,11 +685,22 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
                 <a class="page-link" href="?limit_dl=<?= $limit_dl ?>&page_dl=<?= $page_dl-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
             </li>
             <?php $max_page_dl = ceil($total_dl / $limit_dl); ?>
-            <?php for ($i = 1; $i <= $max_page_dl; $i++): ?>
+            <?php
+            $window = 2;
+            $start = max(1, $page_dl - $window);
+            $end = min($max_page_dl, $page_dl + $window);
+            if ($start > 1) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            for ($i = $start; $i <= $end; $i++): ?>
                 <li class="page-item <?= $i == $page_dl ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_dl=<?= $limit_dl ?>&page_dl=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
-            <?php endfor; ?>
+            <?php endfor;
+            if ($end < $max_page_dl) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            ?>
             <li class="page-item <?= $page_dl == $max_page_dl ? 'disabled' : '' ?>">
                 <a class="page-link" href="?limit_dl=<?= $limit_dl ?>&page_dl=<?= $page_dl+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
             </li>
@@ -728,11 +778,22 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
                 <a class="page-link" href="?limit_consult=<?= $limit_consult ?>&page_consult=<?= $page_consult-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
             </li>
             <?php $max_page_consult = ceil($total_consult / $limit_consult); ?>
-            <?php for ($i = 1; $i <= $max_page_consult; $i++): ?>
+            <?php
+            $window = 2;
+            $start = max(1, $page_consult - $window);
+            $end = min($max_page_consult, $page_consult + $window);
+            if ($start > 1) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            for ($i = $start; $i <= $end; $i++): ?>
                 <li class="page-item <?= $i == $page_consult ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_consult=<?= $limit_consult ?>&page_consult=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
-            <?php endfor; ?>
+            <?php endfor;
+            if ($end < $max_page_consult) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            ?>
             <li class="page-item <?= $page_consult == $max_page_consult ? 'disabled' : '' ?>">
                 <a class="page-link" href="?limit_consult=<?= $limit_consult ?>&page_consult=<?= $page_consult+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
             </li>
@@ -796,11 +857,22 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
                 <a class="page-link" href="?limit_demande=<?= $limit_demande ?>&page_demande=<?= $page_demande-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
             </li>
             <?php $max_page_demande = ceil($total_demande / $limit_demande); ?>
-            <?php for ($i = 1; $i <= $max_page_demande; $i++): ?>
+            <?php
+            $window = 2;
+            $start = max(1, $page_demande - $window);
+            $end = min($max_page_demande, $page_demande + $window);
+            if ($start > 1) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            for ($i = $start; $i <= $end; $i++): ?>
                 <li class="page-item <?= $i == $page_demande ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_demande=<?= $limit_demande ?>&page_demande=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
-            <?php endfor; ?>
+            <?php endfor;
+            if ($end < $max_page_demande) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            ?>
             <li class="page-item <?= $page_demande == $max_page_demande ? 'disabled' : '' ?>">
                 <a class="page-link" href="?limit_demande=<?= $limit_demande ?>&page_demande=<?= $page_demande+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
             </li>
@@ -880,11 +952,22 @@ $logs_demande = $stmt_demande->fetchAll(PDO::FETCH_ASSOC);
                 <a class="page-link" href="?limit_logs=<?= $limit_logs ?>&page_logs=<?= $page_logs-1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&lsaquo;</a>
             </li>
             <?php $max_page_logs = ceil($total_logs / $limit_logs); ?>
-            <?php for ($i = 1; $i <= $max_page_logs; $i++): ?>
+            <?php
+            $window = 2;
+            $start = max(1, $page_logs - $window);
+            $end = min($max_page_logs, $page_logs + $window);
+            if ($start > 1) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            for ($i = $start; $i <= $end; $i++): ?>
                 <li class="page-item <?= $i == $page_logs ? 'active' : '' ?>">
                     <a class="page-link" href="?limit_logs=<?= $limit_logs ?>&page_logs=<?= $i ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>"><?= $i ?></a>
                 </li>
-            <?php endfor; ?>
+            <?php endfor;
+            if ($end < $max_page_logs) {
+                echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            ?>
             <li class="page-item <?= $page_logs == $max_page_logs ? 'disabled' : '' ?>">
                 <a class="page-link" href="?limit_logs=<?= $limit_logs ?>&page_logs=<?= $page_logs+1 ?>&user=<?= urlencode($filtre_user) ?>&action=<?= urlencode($filtre_action) ?>&date=<?= urlencode($filtre_date) ?>">&rsaquo;</a>
             </li>
