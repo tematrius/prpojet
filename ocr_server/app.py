@@ -33,11 +33,15 @@ def traiter_ocr():
 
         # 2. Si le texte est vide, fallback OCR
         if not texte_final.strip():
-            images = convert_from_path(tmp_pdf.name, dpi=300)
-            for image in images:
+            print("OCR fallback triggered")
+            images = convert_from_path(tmp_pdf.name, dpi=200, poppler_path=r'C:\poppler-24.08.0\Library\bin')
+            print(f"Nombre d'images extraites : {len(images)}")
+            for idx, image in enumerate(images):
                 gray = ImageOps.grayscale(image)
-                # Optional enhancement: thresholding, denoising etc.
-                texte = pytesseract.image_to_string(gray, lang='fra+eng', config='--psm 6')
+                # Binarisation pour améliorer la reconnaissance
+                bw = gray.point(lambda x: 0 if x < 180 else 255, '1')
+                texte = pytesseract.image_to_string(bw, lang='fra+eng', config='--psm 3')
+                print(f"OCR page {idx+1}: {texte[:100]}")  # Affiche les 100 premiers caractères de chaque page OCR"
                 texte_final += texte + "\n"
 
         if not texte_final.strip():
@@ -49,6 +53,7 @@ def traiter_ocr():
         })
 
     except Exception as e:
+        print("Erreur serveur OCR :", str(e))
         return jsonify({"erreur": str(e)}), 500
     finally:
         os.unlink(tmp_pdf.name)

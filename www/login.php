@@ -84,16 +84,16 @@ if ($user) {
         // Redirection selon le rôle
         switch ($user['role']) {
             case 'ag':
-                header("Location: admin/dashboard.php");
+                header("Location: admin/index.php");
                 break;
             case 'secretaire':
-                header("Location: secretaire/dashboard.php");
+                header("Location: secretaire/index.php");
                 break;
             case 'employe':
-                header("Location: employe/dashboard.php");
+                header("Location: employe/index.php");
                 break;
             case 'superadmin':
-                header("Location: superadmin/dashboard.php");
+                header("Location: superadmin/index.php");
                 break;
             default:
                 header("Location: index.php");
