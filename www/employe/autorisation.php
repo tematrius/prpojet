@@ -1,3 +1,45 @@
+</style>
+<style>
+@media (max-width: 600px) {
+  #demandesTable {
+    border: none;
+  }
+  #demandesTable thead {
+    display: none;
+  }
+  #demandesTable tbody, #demandesTable tr, #demandesTable td {
+    display: block;
+    width: 100%;
+  }
+  #demandesTable tr {
+    margin-bottom: 1.2rem;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    background: #fff;
+    padding: 10px 8px;
+  }
+  #demandesTable td {
+    padding: 6px 8px;
+    border: none !important;
+    font-size: 0.97em;
+    position: relative;
+  }
+  #demandesTable td:before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #0d6efd;
+    display: block;
+    margin-bottom: 2px;
+    font-size: 0.93em;
+  }
+  #demandesTable .btn, #demandesTable .badge {
+    width: 100%;
+    margin-bottom: 4px;
+    font-size: 1em;
+  }
+}
+</style>
 <?php
 require '../includes/db.php';
 include '../includes/dashboard-template.php';
@@ -107,10 +149,10 @@ $demandes = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <?php else: ?>
           <?php foreach ($demandes as $i => $dem): ?>
             <tr data-index="<?= $i ?>">
-              <td><?= htmlspecialchars($dem['nom_fichier']) ?></td>
-              <td><?= htmlspecialchars($dem['provenance']) ?></td>
-              <td><?= date('d/m/Y H:i', strtotime($dem['date_post'])) ?></td>
-              <td>
+              <td data-label="Fichier"><?= htmlspecialchars($dem['nom_fichier']) ?></td>
+              <td data-label="Provenance"><?= htmlspecialchars($dem['provenance']) ?></td>
+              <td data-label="Date"><?= date('d/m/Y H:i', strtotime($dem['date_post'])) ?></td>
+              <td data-label="Statut">
                 <?php if ($dem['statut'] === 'en_attente'): ?>
                   <span class="badge bg-secondary">En attente</span>
                 <?php elseif ($dem['statut'] === 'accepte'): ?>
@@ -122,7 +164,7 @@ $demandes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                   <?php endif; ?>
                 <?php endif; ?>
               </td>
-              <td>
+              <td data-label="Action">
                 <?php if ($dem['statut'] === 'accepte'):
                   $expiration = isset($dem['expiration_acces']) ? strtotime($dem['expiration_acces']) : 0;
                   $now = time();
@@ -144,7 +186,7 @@ $demandes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                   <i class="text-muted">En attente</i>
                 <?php endif; ?>
               </td>
-              <td>
+              <td data-label="Relancer">
                 <?php
                 $can_relaunch = false;
                 if ($dem['statut'] === 'refuse') {
